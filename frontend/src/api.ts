@@ -4,6 +4,20 @@ import { Article, Progress, Stats, AnnotationCreate } from './types';
 const API_BASE = 'http://localhost:8000';
 
 export const api = {
+  getSkippedArticles: async (annotator: string = 'default'): Promise<string[]> => {
+    const response = await axios.get(`${API_BASE}/articles/skipped`, {
+      params: { annotator }
+    });
+    return response.data;
+  },
+
+  getFlaggedArticles: async (annotator: string = 'default'): Promise<string[]> => {
+    const response = await axios.get(`${API_BASE}/articles/flagged`, {
+      params: { annotator }
+    });
+    return response.data;
+  },
+
   getNextArticle: async (annotator: string = 'default'): Promise<Article> => {
     const response = await axios.get(`${API_BASE}/articles/next/unannotated`, {
       params: { annotator }

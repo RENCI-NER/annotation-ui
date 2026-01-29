@@ -75,6 +75,70 @@ const FALLBACK_PREDICATES = [
   'biolink:treats'
 ];
 
+const QUALIFIED_PREDICATES = [
+  "affects abundance of",
+  "increases abundance of",
+  "decreases abundance of",
+  "affects activity or abundance of",
+  "increases activity or abundance of",
+  "decreases activity or abundance of",
+  "affects activity of",
+  "increases activity of",
+  "decreases activity of",
+  "affects expression of",
+  "increases expression of",
+  "decreases expression of",
+  "affects folding of",
+  "increases folding of",
+  "decreases folding of",
+  "affects localization of",
+  "increases localization of",
+  "decreases localization of",
+  "affects molecular modification of",
+  "increases molecular modification of",
+  "decreases molecular modification of",
+  "affects metabolic processing of",
+  "increases metabolic processing of",
+  "decreases metabolic processing of",
+  "affects synthesis of",
+  "increases synthesis of",
+  "decreases synthesis of",
+  "affects transport of",
+  "increases transport of",
+  "decreases transport of",
+  "affects degradation of",
+  "increases degradation of",
+  "increases cleavage",
+  "increases hydrolysis",
+  "decreases degradation of",
+  "decreases cleavage",
+  "decreases hydrolysis",
+  "affects secretion of",
+  "increases secretion of",
+  "decreases secretion of",
+  "affects mutation rate of",
+  "increases mutation rate of",
+  "increases mutagenesis",
+  "decreases mutation rate of",
+  "decreases mutagenesis",
+  "affects splicing of",
+  "increases splicing of",
+  "increases RNA splicing",
+  "decreases splicing of",
+  "decreases RNA splicing",
+  "affects uptake of",
+  "increases uptake of",
+  "decreases uptake of",
+  "affects molecular interaction",
+  "increases molecular interaction",
+  "decreases molecular interaction",
+  "entity negatively regulates entity",
+  "entity positively regulates entity",
+  "process positively regulates process",
+  "process negatively regulates process",
+];
+
+
 // Excluded domain/range values
 const EXCLUDED_DOMAIN_RANGE = [
   'agent',
@@ -170,11 +234,11 @@ export const useBiolinkPredicates = () => {
           'https://raw.githubusercontent.com/biolink/biolink-model/master/src/biolink_model/schema/biolink_model.yaml',
           { signal: AbortSignal.timeout(10000) }
         );
-
+    
         if (!response.ok) {
           throw new Error('Failed to fetch Biolink Model');
         }
-
+    
         const yamlText = await response.text();
         const data = yaml.load(yamlText) as any;
         
@@ -187,7 +251,7 @@ export const useBiolinkPredicates = () => {
         if (startIdx === -1 || endIdx === -1) {
           throw new Error('Could not find predicate range in slots');
         }
-
+    
         const predicateSlots = slotNames.slice(startIdx, endIdx);
         const allPredicates: PredicateInfo[] = [];
         
@@ -213,14 +277,27 @@ export const useBiolinkPredicates = () => {
             allPredicates.push(predicateInfo);
           }
         }
-
+    
+        // AUGMENT with qualified predicates (no description, use name as value)
+        for (const qualifiedPred of QUALIFIED_PREDICATES) {
+          allPredicates.push({
+            id: qualifiedPred,  // Use the text as ID (no biolink: prefix, no underscores)
+            name: qualifiedPred,  // Same as ID
+            description: null,  // No description for qualified predicates
+            domain: null,
+            range: null,
+            is_a: null
+          });
+        }
+    
         setPredicates(allPredicates);
         setError(null);
         setLoading(false);
-
+    
       } catch (err) {
         console.error('Failed to fetch Biolink YAML:', err);
         
+        // FALLBACK: Use local predicates + qualified predicates
         const fallbackPredicates = FALLBACK_PREDICATES.map(pred => {
           const name = pred.replace('biolink:', '').replace(/_/g, ' ');
           return {
@@ -229,13 +306,22 @@ export const useBiolinkPredicates = () => {
             description: null
           };
         });
+    
+        // AUGMENT fallback with qualified predicates
+        for (const qualifiedPred of QUALIFIED_PREDICATES) {
+          fallbackPredicates.push({
+            id: qualifiedPred,
+            name: qualifiedPred,
+            description: null
+          });
+        }
         
         setPredicates(fallbackPredicates);
         setError('Unable to fetch predicates from Biolink Model - using local list');
         setLoading(false);
       }
     };
-
+    
     fetchDescriptions();
   }, []);
 

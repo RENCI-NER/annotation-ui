@@ -1,40 +1,32 @@
-import { useState, useEffect } from 'react';
+// frontend/src/App.tsx - REPLACE ENTIRE FILE
+
+import React, { useState, useEffect } from 'react';
 import { AbstractView } from './components/AbstractView';
 import { AnnotationPanel } from './components/AnnotationPanel';
 import { ProgressBar } from './components/ProgressBar';
-import { Login } from './components/Login';
-import { AdminDashboard } from './components/AdminDashboard';
 import { api } from './api';
 import { Article, Progress, Stats } from './types';
 
+type Mode = 'normal' | 'review-skipped' | 'review-flagged';
+
 function App() {
-  const [annotator, setAnnotator] = useState<string | null>(
-    localStorage.getItem('annotator')
-  );
-  const [isAdmin, setIsAdmin] = useState(false);
   const [article, setArticle] = useState<Article | null>(null);
   const [currentTripleIndex, setCurrentTripleIndex] = useState(0);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>('normal');
+  const [reviewPmids, setReviewPmids] = useState<string[]>([]);
+  const [reviewIndex, setReviewIndex] = useState(0);
 
-  // Check for admin mode
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('admin') === 'true') {
-      setIsAdmin(true);
-      setLoading(false);
-    }
-  }, []);
+  const annotator = 'default';
 
   const loadArticle = async () => {
-    if (!annotator) return;
-  
     try {
       setLoading(true);
       setError(null);
-      const data = await api.getNextArticle(annotator);  // Pass annotator here
+      const data = await api.getNextArticle();
       setArticle(data);
       setCurrentTripleIndex(0);
     } catch (err: any) {
@@ -44,9 +36,79 @@ function App() {
     }
   };
 
-  const loadProgress = async () => {
-    if (!annotator) return;
+  const loadSpecificArticle = async (pmid: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await api.getArticle(pmid);
+      setArticle(data);
+      
+      // Find first skipped/flagged triple
+      let firstIndex = 0;
+      if (mode === 'review-skipped') {
+        firstIndex = data.triples.findIndex(t => t.skipped);
+      } else if (mode === 'review-flagged') {
+        firstIndex = data.triples.findIndex(t => t.flagged);
+      }
+      
+      setCurrentTripleIndex(firstIndex >= 0 ? firstIndex : 0);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to load article');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  const enterReviewMode = async (reviewMode: 'review-skipped' | 'review-flagged') => {
+    try {
+      setLoading(true);
+      const pmids = reviewMode === 'review-skipped' 
+        ? await api.getSkippedArticles(annotator)
+        : await api.getFlaggedArticles(annotator);
+      
+      if (pmids.length === 0) {
+        alert(`No ${reviewMode === 'review-skipped' ? 'skipped' : 'flagged'} items to review!`);
+        return;
+      }
+      
+      setMode(reviewMode);
+      setReviewPmids(pmids);
+      setReviewIndex(0);
+      await loadSpecificArticle(pmids[0]);
+    } catch (err) {
+      console.error('Failed to enter review mode:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const exitReviewMode = () => {
+    setMode('normal');
+    setReviewPmids([]);
+    setReviewIndex(0);
+    loadArticle();
+  };
+
+  const nextReviewArticle = () => {
+    if (reviewIndex < reviewPmids.length - 1) {
+      const nextIndex = reviewIndex + 1;
+      setReviewIndex(nextIndex);
+      loadSpecificArticle(reviewPmids[nextIndex]);
+    } else {
+      // Finished reviewing
+      exitReviewMode();
+    }
+  };
+
+  const prevReviewArticle = () => {
+    if (reviewIndex > 0) {
+      const prevIndex = reviewIndex - 1;
+      setReviewIndex(prevIndex);
+      loadSpecificArticle(reviewPmids[prevIndex]);
+    }
+  };
+
+  const loadProgress = async () => {
     try {
       const data = await api.getProgress(annotator);
       setProgress(data);
@@ -56,8 +118,6 @@ function App() {
   };
 
   const loadStats = async () => {
-    if (!annotator) return;
-
     try {
       const data = await api.getStats(annotator);
       setStats(data);
@@ -67,26 +127,13 @@ function App() {
   };
 
   useEffect(() => {
-    if (annotator && !isAdmin) {
-      loadArticle();
-      loadProgress();
-      loadStats();
-    }
-  }, [annotator, isAdmin]);
-
-  const handleLogin = (name: string) => {
-    setAnnotator(name);
-    localStorage.setItem('annotator', name);
-  };
-
-  const handleLogout = () => {
-    setAnnotator(null);
-    localStorage.removeItem('annotator');
-    setArticle(null);
-  };
+    loadArticle();
+    loadProgress();
+    loadStats();
+  }, []);
 
   const handleAnnotate = async (predicate: string, confidence: string, notes?: string) => {
-    if (!article || !annotator) return;
+    if (!article) return;
 
     const triple = article.triples[currentTripleIndex];
 
@@ -106,7 +153,9 @@ function App() {
         ...triple,
         predicate,
         confidence,
-        notes
+        notes,
+        skipped: false,
+        flagged: false
       };
       setArticle({ ...article, triples: updatedTriples });
 
@@ -118,7 +167,7 @@ function App() {
   };
 
   const handleSkip = async () => {
-    if (!article || !annotator) return;
+    if (!article) return;
 
     const triple = article.triples[currentTripleIndex];
 
@@ -137,7 +186,11 @@ function App() {
       if (currentTripleIndex < article.triples.length - 1) {
         setCurrentTripleIndex(currentTripleIndex + 1);
       } else {
-        loadArticle();
+        if (mode === 'review-skipped') {
+          nextReviewArticle();
+        } else {
+          loadArticle();
+        }
       }
     } catch (err) {
       console.error('Failed to skip:', err);
@@ -145,7 +198,7 @@ function App() {
   };
 
   const handleFlag = async () => {
-    if (!article || !annotator) return;
+    if (!article) return;
 
     const triple = article.triples[currentTripleIndex];
 
@@ -164,7 +217,11 @@ function App() {
       if (currentTripleIndex < article.triples.length - 1) {
         setCurrentTripleIndex(currentTripleIndex + 1);
       } else {
-        loadArticle();
+        if (mode === 'review-flagged') {
+          nextReviewArticle();
+        } else {
+          loadArticle();
+        }
       }
     } catch (err) {
       console.error('Failed to flag:', err);
@@ -183,21 +240,14 @@ function App() {
     if (currentTripleIndex < article.triples.length - 1) {
       setCurrentTripleIndex(currentTripleIndex + 1);
     } else {
-      loadArticle();
+      if (mode.startsWith('review-')) {
+        nextReviewArticle();
+      } else {
+        loadArticle();
+      }
     }
   };
 
-  // Show admin dashboard
-  if (isAdmin) {
-    return <AdminDashboard />;
-  }
-
-  // Show login if no annotator
-  if (!annotator) {
-    return <Login onLogin={handleLogin} />;
-  }
-
-  // Show loading
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -209,20 +259,13 @@ function App() {
     );
   }
 
-  // Show error/completion
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="text-4xl mb-4">🎉</div>
           <div className="text-2xl font-bold mb-2">All Done!</div>
-          <div className="text-gray-600 mb-4">{error}</div>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
-          >
-            Logout
-          </button>
+          <div className="text-gray-600">{error}</div>
         </div>
       </div>
     );
@@ -234,13 +277,7 @@ function App() {
         <div className="text-center">
           <div className="text-4xl mb-4">🎉</div>
           <div className="text-2xl font-bold mb-2">No More Articles!</div>
-          <div className="text-gray-600 mb-4">You've completed all annotations.</div>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
-          >
-            Logout
-          </button>
+          <div className="text-gray-600">You've completed all annotations.</div>
         </div>
       </div>
     );
@@ -250,13 +287,43 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-gray-800">
               🔬 RELATE Annotation Interface
             </h1>
             <div className="flex items-center gap-4">
+              {mode !== 'normal' && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={exitReviewMode}
+                    className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg"
+                  >
+                    ← Exit Review Mode
+                  </button>
+                  <div className="text-sm text-gray-600">
+                    {mode === 'review-skipped' ? '⏭️ Reviewing Skipped' : '🚩 Reviewing Flagged'}
+                    {' '}({reviewIndex + 1}/{reviewPmids.length})
+                  </div>
+                </div>
+              )}
+              {mode === 'normal' && (
+                <>
+                  <button
+                    onClick={() => enterReviewMode('review-skipped')}
+                    className="px-4 py-2 text-sm bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded-lg"
+                  >
+                    ⏭️ Review Skipped
+                  </button>
+                  <button
+                    onClick={() => enterReviewMode('review-flagged')}
+                    className="px-4 py-2 text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-lg"
+                  >
+                    🚩 Review Flagged
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => window.location.reload()}
                 className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg"
@@ -266,45 +333,6 @@ function App() {
               <div className="text-sm text-gray-600">
                 👤 {annotator}
               </div>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 text-sm bg-red-100 hover:bg-red-200 text-red-700 rounded-lg"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </header> */}
-      <header className="bg-gradient-to-r from-blue-600 to-purple-600 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="text-3xl">🧬</div>
-              <div>
-                <h1 className="text-2xl font-bold text-white">
-                  RELATE Annotation Platform
-                </h1>
-                <p className="text-blue-100 text-sm">Biomedical Knowledge Graph Construction</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 text-sm bg-white/20 hover:bg-white/30 text-white rounded-lg transition-all backdrop-blur-sm"
-              >
-                🔄 Refresh
-              </button>
-              <div className="px-4 py-2 bg-white/20 text-white rounded-lg backdrop-blur-sm">
-                <div className="text-xs text-blue-100">Annotator</div>
-                <div className="font-semibold">{annotator}</div>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg transition-all"
-              >
-                Logout
-              </button>
             </div>
           </div>
         </div>
@@ -313,25 +341,16 @@ function App() {
       <div className="max-w-7xl mx-auto px-4 py-4">
         {progress && stats && <ProgressBar progress={progress} stats={stats} />}
       </div>
-      
+
       <div className="max-w-7xl mx-auto px-4 mb-4">
-        <div className="bg-white rounded-xl shadow-lg p-5 border-l-4 border-blue-500">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <span className="px-2.5 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
-                  PMID: {article.pmid}
-                </span>
-                <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-semibold rounded-full">
-                  📅 {article.year}
-                </span>
-                <span className="px-2.5 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">
-                  🔗 {article.target_entity_count} entities
-                </span>
-              </div>
-              <h2 className="text-lg font-semibold text-gray-800 leading-tight">
-                {article.title}
-              </h2>
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm text-gray-500">PMID: {article.pmid}</div>
+              <div className="font-semibold text-gray-800">{article.title}</div>
+            </div>
+            <div className="text-sm text-gray-600">
+              Year: {article.year} | {article.target_entity_count} target entities
             </div>
           </div>
         </div>
