@@ -23,7 +23,7 @@ export const Login: React.FC<Props> = ({ onLogin }) => {
             RELATE Annotation
           </h1>
           <p className="text-gray-500 text-sm">
-            Biomedical Knowledge Graph Triple Anotation
+            Biomedical Knowledge Graph Triple Annotation
           </p>
         </div>
         

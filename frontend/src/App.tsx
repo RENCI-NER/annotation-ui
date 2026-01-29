@@ -5,6 +5,7 @@ import { AbstractView } from './components/AbstractView';
 import { AnnotationPanel } from './components/AnnotationPanel';
 import { ProgressBar } from './components/ProgressBar';
 import { AdminDashboard } from './components/AdminDashboard';
+import { Login } from './components/Login'; 
 import { api } from './api';
 import { Article, Progress, Stats } from './types';
 
@@ -16,6 +17,21 @@ function App() {
   if (isAdminPage) {
     return <AdminDashboard />;
   }
+
+  const [annotator, setAnnotator] = useState<string | null>(() => {
+    return localStorage.getItem('annotator');
+  });
+
+  if (!annotator) {
+    return (
+      <Login
+        onLogin={(name) => {
+          localStorage.setItem('annotator', name);
+          setAnnotator(name);
+        }}
+      />
+    );
+  }
   const [article, setArticle] = useState<Article | null>(null);
   const [currentTripleIndex, setCurrentTripleIndex] = useState(0);
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -25,8 +41,6 @@ function App() {
   const [mode, setMode] = useState<Mode>('normal');
   const [reviewPmids, setReviewPmids] = useState<string[]>([]);
   const [reviewIndex, setReviewIndex] = useState(0);
-
-  const annotator = 'default';
 
   const loadArticle = async () => {
     try {
@@ -336,8 +350,18 @@ function App() {
               >
                 Refresh
               </button>
-              <div className="text-sm text-gray-600">
-                👤 {annotator}
+
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">👤 {annotator}</span>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('annotator');
+                    window.location.reload();
+                  }}
+                  className="px-3 py-1 text-xs bg-red-50 text-red-600 hover:bg-red-100 rounded"
+                >
+                  Logout
+                </button>
               </div>
             </div>
           </div>
