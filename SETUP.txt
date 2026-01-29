@@ -1,0 +1,30 @@
+IMPORTANT: Complete the following React component files
+=======================================================
+
+The following files need to be created in frontend/src/:
+
+1. frontend/src/components/AnnotationPanel.tsx
+2. frontend/src/components/ProgressBar.tsx  
+3. frontend/src/App.tsx
+
+These files contain the complete code provided in the conversation above.
+Copy the code for each file from the conversation into these files.
+
+Alternatively, you can find the complete code in the text file 
+"annotation-ui-complete.txt" that was provided earlier.
+
+Quick Start (after creating the above files):
+==============================================
+
+Backend:
+  cd backend
+  pip install -r requirements.txt
+  python load_corpus.py /path/to/corpus.json
+  python main.py
+
+Frontend:
+  cd frontend
+  npm install
+  npm run dev
+
+Then open http://localhost:5173
