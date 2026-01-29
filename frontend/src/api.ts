@@ -1,7 +1,12 @@
 import axios from 'axios';
 import { Article, Progress, Stats, AnnotationCreate } from './types';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = window.location.hostname === 'localhost' 
+  ? 'http://localhost:8000'  // Development
+  : '/api';  // Production
+
+console.log('API_BASE:', API_BASE);
+
 
 export const api = {
   getSkippedArticles: async (annotator: string = 'default'): Promise<string[]> => {
