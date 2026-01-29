@@ -10,16 +10,17 @@ from database import engine, get_db
 
 models.Base.metadata.create_all(bind=engine)
 
-
-app = FastAPI(title="Relation Annotation API",
-    root_path="/api"
+app = FastAPI(
+    title="Relation Annotation API",
+    root_path="/api"  
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173",
-    "https://annotation-test.apps.renci.org",  
-    "https://annotation-test.apps.renci.org/admin"],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://annotation-test.apps.renci.org"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -45,14 +46,17 @@ def get_articles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db))
                 triple.flagged = annotation.flagged
     return articles
 
+# REMOVE THE FIRST /articles/{pmid} - KEEP ONLY THIS ONE
 @app.get("/articles/{pmid}", response_model=schemas.ArticleResponse)
-def get_article(pmid: str, db: Session = Depends(get_db)):
+def get_article(pmid: str, annotator: str = "default", db: Session = Depends(get_db)):
     article = db.query(models.Article).filter(models.Article.pmid == pmid).first()
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
+    
     for triple in article.triples:
         annotation = db.query(models.Annotation).filter(
-            models.Annotation.triple_id == triple.id
+            models.Annotation.triple_id == triple.id,
+            models.Annotation.annotator == annotator
         ).first()
         if annotation:
             triple.predicate = annotation.predicate
@@ -60,19 +64,21 @@ def get_article(pmid: str, db: Session = Depends(get_db)):
             triple.notes = annotation.notes
             triple.skipped = annotation.skipped
             triple.flagged = annotation.flagged
+            triple.annotated = True
+        else:
+            triple.annotated = False
+    
     return article
 
 @app.get("/articles/next/unannotated", response_model=schemas.ArticleResponse)
 def get_next_unannotated_article(annotator: str = "default", db: Session = Depends(get_db)):
     """Get next article assigned to this annotator"""
     
-    # Check if this annotator has assignments
     assignments = db.query(models.ArticleAssignment).filter(
         models.ArticleAssignment.annotator == annotator
     ).all()
     
     if assignments:
-        # User has assignments - only show their assigned articles
         assigned_pmids = [a.pmid for a in assignments]
         
         for pmid in assigned_pmids:
@@ -83,7 +89,6 @@ def get_next_unannotated_article(annotator: str = "default", db: Session = Depen
             if not article:
                 continue
             
-            # Check if has unannotated triples for this annotator
             has_unannotated = False
             for triple in article.triples:
                 annotation = db.query(models.Annotation).filter(
@@ -96,7 +101,6 @@ def get_next_unannotated_article(annotator: str = "default", db: Session = Depen
                     break
             
             if has_unannotated:
-                # Attach existing annotations
                 for t in article.triples:
                     ann = db.query(models.Annotation).filter(
                         models.Annotation.triple_id == t.id,
@@ -124,7 +128,6 @@ def get_next_unannotated_article(annotator: str = "default", db: Session = Depen
         )
     
     else:
-        # No assignments - show any unannotated article (old behavior)
         articles = db.query(models.Article).all()
         for article in articles:
             has_unannotated = False
@@ -154,7 +157,7 @@ def get_next_unannotated_article(annotator: str = "default", db: Session = Depen
         raise HTTPException(
             status_code=404,
             detail="No unannotated articles remaining"
-        )   
+        )
 
 @app.post("/annotations", response_model=schemas.AnnotationResponse)
 def create_annotation(annotation: schemas.AnnotationCreate, db: Session = Depends(get_db)):
@@ -182,8 +185,6 @@ def create_annotation(annotation: schemas.AnnotationCreate, db: Session = Depend
 
 @app.get("/admin/annotators", response_model=List[schemas.AnnotatorInfo])
 def get_annotators(db: Session = Depends(get_db)):
-    """Get list of all annotators and their stats"""
-    # Get all unique annotators
     annotators = db.query(models.ArticleAssignment.annotator).distinct().all()
     
     result = []
@@ -207,11 +208,8 @@ def get_annotators(db: Session = Depends(get_db)):
 
 @app.post("/admin/assign", response_model=schemas.AssignmentResponse)
 def assign_articles(assignment: schemas.AssignmentCreate, db: Session = Depends(get_db)):
-    """Assign N articles to an annotator"""
-    # Get already assigned PMIDs
     assigned_pmids = [a.pmid for a in db.query(models.ArticleAssignment).all()]
     
-    # Get unassigned articles
     unassigned = db.query(models.Article).filter(
         ~models.Article.pmid.in_(assigned_pmids) if assigned_pmids else True
     ).limit(assignment.num_articles).all()
@@ -223,7 +221,6 @@ def assign_articles(assignment: schemas.AssignmentCreate, db: Session = Depends(
             message="No unassigned articles available"
         )
     
-    # Create assignments
     for article in unassigned:
         new_assignment = models.ArticleAssignment(
             annotator=assignment.annotator,
@@ -241,7 +238,6 @@ def assign_articles(assignment: schemas.AssignmentCreate, db: Session = Depends(
 
 @app.get("/admin/stats")
 def get_admin_stats(db: Session = Depends(get_db)):
-    """Get overall statistics"""
     total_articles = db.query(models.Article).count()
     total_assigned = db.query(models.ArticleAssignment).count()
     total_completed = db.query(models.ArticleAssignment).filter(
@@ -257,7 +253,6 @@ def get_admin_stats(db: Session = Depends(get_db)):
 
 @app.delete("/admin/annotator/{annotator}")
 def delete_annotator_assignments(annotator: str, db: Session = Depends(get_db)):
-    """Delete all assignments for an annotator"""
     deleted = db.query(models.ArticleAssignment).filter(
         models.ArticleAssignment.annotator == annotator
     ).delete()
@@ -265,29 +260,6 @@ def delete_annotator_assignments(annotator: str, db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": f"Deleted {deleted} assignments for {annotator}"}
-
-@app.get("/articles/{pmid}", response_model=schemas.ArticleResponse)
-def get_article(pmid: str, annotator: str = "default", db: Session = Depends(get_db)):
-    article = db.query(models.Article).filter(models.Article.pmid == pmid).first()
-    if not article:
-        raise HTTPException(status_code=404, detail="Article not found")
-    
-    for triple in article.triples:
-        annotation = db.query(models.Annotation).filter(
-            models.Annotation.triple_id == triple.id,
-            models.Annotation.annotator == annotator
-        ).first()
-        if annotation:
-            triple.predicate = annotation.predicate
-            triple.confidence = annotation.confidence
-            triple.notes = annotation.notes
-            triple.skipped = annotation.skipped
-            triple.flagged = annotation.flagged
-            triple.annotated = True  # Add this flag
-        else:
-            triple.annotated = False  # Not yet annotated
-    
-    return article
 
 @app.get("/progress", response_model=schemas.ProgressResponse)
 def get_progress(annotator: str = "default", db: Session = Depends(get_db)):
@@ -298,7 +270,7 @@ def get_progress(annotator: str = "default", db: Session = Depends(get_db)):
         models.Annotation.annotator == annotator
     ).all()
     
-    annotated_triples = len([a for a in annotations if a.predicate])  # Has predicate
+    annotated_triples = len([a for a in annotations if a.predicate])
     skipped_triples = len([a for a in annotations if a.skipped])
     flagged_triples = len([a for a in annotations if a.flagged])
     unannotated_triples = total_triples - len(annotations)
@@ -321,14 +293,12 @@ def get_progress(annotator: str = "default", db: Session = Depends(get_db)):
         completion_percentage=round(completion_pct, 1)
     )
 
-# Add endpoint to view skipped/flagged
 @app.get("/annotations/review", response_model=List[schemas.AnnotationResponse])
 def get_review_items(
     annotator: str = "default",
-    status: str = "flagged",  # "flagged" or "skipped"
+    status: str = "flagged",
     db: Session = Depends(get_db)
 ):
-    """Get all flagged or skipped annotations for review"""
     query = db.query(models.Annotation).filter(
         models.Annotation.annotator == annotator
     )
@@ -342,7 +312,6 @@ def get_review_items(
 
 @app.get("/articles/skipped", response_model=List[str])
 def get_articles_with_skipped(annotator: str = "default", db: Session = Depends(get_db)):
-    """Get list of PMIDs with skipped triples"""
     annotations = db.query(models.Annotation).filter(
         models.Annotation.annotator == annotator,
         models.Annotation.skipped == True
@@ -358,7 +327,6 @@ def get_articles_with_skipped(annotator: str = "default", db: Session = Depends(
 
 @app.get("/articles/flagged", response_model=List[str])
 def get_articles_with_flagged(annotator: str = "default", db: Session = Depends(get_db)):
-    """Get list of PMIDs with flagged triples"""
     annotations = db.query(models.Annotation).filter(
         models.Annotation.annotator == annotator,
         models.Annotation.flagged == True
@@ -399,13 +367,11 @@ def get_stats(annotator: str = "default", db: Session = Depends(get_db)):
     )
 
 def update_annotator_stats(annotator: str, db: Session):
-    """Update annotator statistics"""
     stats = db.query(models.AnnotatorStats).filter(
         models.AnnotatorStats.annotator == annotator
     ).first()
     
     if not stats:
-        # Create new stats if doesn't exist
         stats = models.AnnotatorStats(
             annotator=annotator,
             total_annotations=1,
@@ -415,10 +381,8 @@ def update_annotator_stats(annotator: str, db: Session):
         )
         db.add(stats)
         db.commit()
-        return  # STOP HERE - don't continue to the code below
+        return
     
-    # Only reach here if stats already exists
-    # CRITICAL: Initialize NULL fields BEFORE doing any math
     if stats.total_annotations is None:
         stats.total_annotations = 0
     if stats.streak_days is None:
@@ -426,12 +390,10 @@ def update_annotator_stats(annotator: str, db: Session):
     if stats.achievements is None:
         stats.achievements = []
     
-    # NOW it's safe to increment
     stats.total_annotations += 1
     
     today = datetime.utcnow().date()
     
-    # Update streak
     if stats.last_annotation_date:
         last_date = stats.last_annotation_date.date() if isinstance(stats.last_annotation_date, datetime) else stats.last_annotation_date
         days_diff = (today - last_date).days
@@ -445,8 +407,7 @@ def update_annotator_stats(annotator: str, db: Session):
     
     stats.last_annotation_date = datetime.utcnow()
     
-    # Update achievements
-    achievements = list(stats.achievements)  # Make a copy
+    achievements = list(stats.achievements)
     
     if stats.total_annotations >= 10 and 'first_10' not in achievements:
         achievements.append('first_10')
