@@ -4,10 +4,10 @@ import yaml from 'js-yaml';
 interface PredicateInfo {
   id: string;
   name: string;
-  description: string | null;
-  domain?: string;
-  range?: string;
-  is_a?: string;
+  description: string | null | undefined;
+  domain?: string | null;
+  range?: string | null;
+  is_a?: string |null;
 }
 
 const FALLBACK_PREDICATES = [
@@ -321,7 +321,7 @@ export const useBiolinkPredicates = () => {
         setLoading(false);
       }
     };
-    
+
     fetchDescriptions();
   }, []);
 
