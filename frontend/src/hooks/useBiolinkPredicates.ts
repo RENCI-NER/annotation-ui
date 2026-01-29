@@ -4,7 +4,7 @@ import yaml from 'js-yaml';
 interface PredicateInfo {
   id: string;
   name: string;
-  description: string | null | undefined;
+  description: string | null ;
   domain?: string | null;
   range?: string | null;
   is_a?: string |null;

@@ -17,7 +17,7 @@ export interface Triple {
   llm_suggestion: string | null;
   predicate: string | null;
   confidence: string | null;
-  notes: string | null;
+  notes: string | null |undefined;
   skipped: boolean;
   flagged: boolean;
   annotated: boolean;
@@ -56,7 +56,7 @@ export interface AnnotationCreate {
   triple_id: number;
   predicate?: string;
   confidence: string;
-  notes?: string;
+  notes?: string | null;
   skipped: boolean;
   flagged: boolean;
   annotator: string;
