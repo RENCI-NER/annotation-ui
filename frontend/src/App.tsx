@@ -4,12 +4,18 @@ import React, { useState, useEffect } from 'react';
 import { AbstractView } from './components/AbstractView';
 import { AnnotationPanel } from './components/AnnotationPanel';
 import { ProgressBar } from './components/ProgressBar';
+import { AdminDashboard } from './components/AdminDashboard';
 import { api } from './api';
 import { Article, Progress, Stats } from './types';
 
 type Mode = 'normal' | 'review-skipped' | 'review-flagged';
 
 function App() {
+  const isAdminPage = window.location.pathname === '/admin' || 
+                      new URLSearchParams(window.location.search).get('admin') === 'true';
+  if (isAdminPage) {
+    return <AdminDashboard />;
+  }
   const [article, setArticle] = useState<Article | null>(null);
   const [currentTripleIndex, setCurrentTripleIndex] = useState(0);
   const [progress, setProgress] = useState<Progress | null>(null);

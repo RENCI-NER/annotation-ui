@@ -82,4 +82,14 @@ class ArticleAssignment(Base):
     completed = Column(Boolean, default=False)
     
     article = relationship("Article")
+
+class Assignment(Base):
+    __tablename__ = "assignments"
     
+    id = Column(Integer, primary_key=True, index=True)
+    pmid = Column(String, ForeignKey("articles.pmid"))
+    annotator = Column(String)
+    assigned_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, default="pending")  # pending, in_progress, completed
+    
+    article = relationship("Article")   

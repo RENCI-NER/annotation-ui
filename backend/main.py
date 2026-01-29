@@ -15,7 +15,9 @@ app = FastAPI(title="Relation Annotation API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173",
+    "https://annotation-test.apps.renci.org",  
+    "https://annotation-test.apps.renci.org/admin"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -262,59 +264,6 @@ def delete_annotator_assignments(annotator: str, db: Session = Depends(get_db)):
     
     return {"message": f"Deleted {deleted} assignments for {annotator}"}
 
-# @app.get("/progress", response_model=schemas.ProgressResponse)
-# def get_progress(annotator: str = "default", db: Session = Depends(get_db)):
-#     # Check if annotator has assignments
-#     assignments = db.query(models.ArticleAssignment).filter(
-#         models.ArticleAssignment.annotator == annotator
-#     ).all()
-    
-#     if assignments:
-#         # Show progress for assigned articles only
-#         assigned_pmids = [a.pmid for a in assignments]
-#         total_articles = len(assigned_pmids)
-        
-#         # Get triples from assigned articles
-#         all_triples = db.query(models.Triple).filter(
-#             models.Triple.pmid.in_(assigned_pmids)
-#         ).all()
-#         total_triples = len(all_triples)
-        
-#         # Get annotations by this annotator for assigned articles
-#         triple_ids = [t.id for t in all_triples]
-#         annotations = db.query(models.Annotation).filter(
-#             models.Annotation.annotator == annotator,
-#             models.Annotation.triple_id.in_(triple_ids)
-#         ).all()
-#     else:
-#         # Show progress for all articles (old behavior)
-#         total_articles = db.query(models.Article).count()
-#         total_triples = db.query(models.Triple).count()
-#         annotations = db.query(models.Annotation).filter(
-#             models.Annotation.annotator == annotator
-#         ).all()
-    
-#     annotated_triples = len([a for a in annotations if not a.skipped])
-#     skipped_triples = len([a for a in annotations if a.skipped])
-#     flagged_triples = len([a for a in annotations if a.flagged])
-    
-#     annotated_articles = len(set([
-#         db.query(models.Triple).filter(models.Triple.id == a.triple_id).first().pmid
-#         for a in annotations
-#     ]))
-    
-#     completion_pct = (len(annotations) / total_triples * 100) if total_triples > 0 else 0
-    
-#     return schemas.ProgressResponse(
-#         total_articles=total_articles,
-#         annotated_articles=annotated_articles,
-#         total_triples=total_triples,
-#         annotated_triples=annotated_triples,
-#         skipped_triples=skipped_triples,
-#         flagged_triples=flagged_triples,
-#         completion_percentage=round(completion_pct, 1)
-#     )
-
 @app.get("/articles/{pmid}", response_model=schemas.ArticleResponse)
 def get_article(pmid: str, annotator: str = "default", db: Session = Depends(get_db)):
     article = db.query(models.Article).filter(models.Article.pmid == pmid).first()
@@ -420,7 +369,7 @@ def get_articles_with_flagged(annotator: str = "default", db: Session = Depends(
             pmids.add(triple.pmid)
     
     return list(pmids)
-    
+
 @app.get("/stats", response_model=schemas.StatsResponse)
 def get_stats(annotator: str = "default", db: Session = Depends(get_db)):
     stats = db.query(models.AnnotatorStats).filter(

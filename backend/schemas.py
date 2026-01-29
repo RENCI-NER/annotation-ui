@@ -51,6 +51,24 @@ class AnnotationCreate(BaseModel):
     flagged: bool = False
     annotator: str = "default"
 
+class AnnotatorInfo(BaseModel):
+    annotator: str
+    assigned_count: int
+    completed_count: int
+    pending_count: int
+    
+    class Config:
+        from_attributes = True
+
+class AssignmentCreate(BaseModel):
+    annotator: str
+    num_articles: int
+
+class AssignmentResponse(BaseModel):
+    annotator: str
+    assigned_articles: int
+    message: str
+
 class AnnotationResponse(BaseModel):
     id: int
     triple_id: int
