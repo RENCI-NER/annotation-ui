@@ -3,6 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime, timedelta
+from fastapi.responses import StreamingResponse
+import json
+import io
+
 
 import models
 import schemas
@@ -232,8 +236,10 @@ def get_annotators(db: Session = Depends(get_db)):
 
 @app.post("/admin/assign", response_model=schemas.AssignmentResponse)
 def assign_articles(assignment: schemas.AssignmentCreate, db: Session = Depends(get_db)):
+    # Get already assigned PMIDs
     assigned_pmids = [a.pmid for a in db.query(models.ArticleAssignment).all()]
     
+    # Get unassigned articles
     unassigned = db.query(models.Article).filter(
         ~models.Article.pmid.in_(assigned_pmids) if assigned_pmids else True
     ).limit(assignment.num_articles).all()
@@ -245,6 +251,7 @@ def assign_articles(assignment: schemas.AssignmentCreate, db: Session = Depends(
             message="No unassigned articles available"
         )
     
+    # Add new assignments (doesn't remove existing ones)
     for article in unassigned:
         new_assignment = models.ArticleAssignment(
             annotator=assignment.annotator,
@@ -257,7 +264,7 @@ def assign_articles(assignment: schemas.AssignmentCreate, db: Session = Depends(
     return schemas.AssignmentResponse(
         annotator=assignment.annotator,
         assigned_articles=len(unassigned),
-        message=f"Successfully assigned {len(unassigned)} articles"
+        message=f"Successfully assigned {len(unassigned)} additional articles"
     )
 
 @app.get("/admin/stats")
@@ -320,6 +327,198 @@ def reset_annotator(annotator: str, db: Session = Depends(get_db)):
         "annotator": annotator,
         "deleted_annotations": deleted_annotations
     }
+
+@app.get("/admin/export/annotations")
+def export_annotations(annotator: str = None, status: str = "all", db: Session = Depends(get_db)):
+    """
+    Export annotations in original corpus format
+    status: all (all annotations), completed (fully annotated articles), partial (partially annotated)
+    """
+    articles = db.query(models.Article).all()
+  
+    export_data = []
+    
+    for article in articles:
+        # Get annotations for this article
+        annotations_query = db.query(models.Annotation).join(
+            models.Triple, models.Annotation.triple_id == models.Triple.id
+        ).filter(models.Triple.pmid == article.pmid)
+        
+        if annotator:
+            annotations_query = annotations_query.filter(
+                models.Annotation.annotator == annotator
+            )
+        
+        annotations = annotations_query.all()
+        
+        # Filter by status
+        if status == "completed":
+            # Only include if all triples are annotated
+            if len(annotations) < len(article.triples):
+                continue
+        elif status == "partial":
+            # Only include if some but not all triples are annotated
+            if len(annotations) == 0 or len(annotations) >= len(article.triples):
+                continue
+        
+        # Build triples with annotations
+        triples_data = []
+        for triple in article.triples:
+            annotation = next(
+                (a for a in annotations if a.triple_id == triple.id),
+                None
+            )
+  
+            triple_dict = {
+                "subject": triple.subject.text,
+                "subject_id": triple.subject.normalized_id,
+                "subject_label": triple.subject.text,  
+                "subject_types": triple.subject.biolink_types or [],
+                "subject_start": triple.subject.start_pos,
+                "subject_end": triple.subject.end_pos,
+                "object": triple.object.text,
+                "object_id": triple.object.normalized_id,
+                "object_label": triple.object.text,  
+                "object_types": triple.object.biolink_types or [],
+                "object_start": triple.object.start_pos,
+                "object_end": triple.object.end_pos,
+                "relationship": triple.llm_suggestion
+            }
+            
+            # Add annotation if exists
+            if annotation:
+                triple_dict["annotation"] = {
+                    "predicate": annotation.predicate,
+                    "confidence": annotation.confidence,
+                    "notes": annotation.notes,
+                    "skipped": annotation.skipped,
+                    "flagged": annotation.flagged,
+                    "annotator": annotation.annotator,
+                    "created_at": annotation.created_at.isoformat() if annotation.created_at else None,
+                    "updated_at": annotation.updated_at.isoformat() if annotation.updated_at else None
+                }
+            
+            triples_data.append(triple_dict)
+        
+        # Skip articles with no triples (after filtering)
+        if len(triples_data) == 0:
+            continue
+        
+        article_dict = {
+            "pmid": article.pmid,
+            "title": article.title,
+            "abstract": article.abstract,
+            "year": article.year,
+            "triples": triples_data
+        }
+        
+        export_data.append(article_dict)
+    
+    # Create JSON file in memory
+    json_str = json.dumps(export_data, indent=2)
+    json_bytes = json_str.encode('utf-8')
+    
+    filename = f"annotations_{annotator if annotator else 'all'}_{status}.json"
+    
+    return StreamingResponse(
+        io.BytesIO(json_bytes),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )
+
+@app.get("/admin/flagged", response_model=List[schemas.FlaggedTripleInfo])
+def get_all_flagged_triples(db: Session = Depends(get_db)):
+    """Get all flagged triples across all annotators"""
+    flagged = db.query(models.Annotation).filter(
+        models.Annotation.flagged == True
+    ).all()
+    
+    result = []
+    for ann in flagged:
+        triple = db.query(models.Triple).filter(
+            models.Triple.id == ann.triple_id
+        ).first()
+        
+        if triple:
+            article = db.query(models.Article).filter(
+                models.Article.pmid == triple.pmid
+            ).first()
+            
+            result.append(schemas.FlaggedTripleInfo(
+                triple_id=triple.id,
+                pmid=triple.pmid,
+                article_title=article.title if article else "",
+                subject_text=triple.subject.text,
+                object_text=triple.object.text,
+                relationship=triple.llm_suggestion,
+                annotator=ann.annotator,
+                predicate=ann.predicate,
+                notes=ann.notes,
+                flagged_at=ann.updated_at
+            ))
+    
+    return result
+
+@app.delete("/admin/triple/{triple_id}")
+def delete_triple(triple_id: int, db: Session = Depends(get_db)):
+    """Delete a triple (admin only - for removing bad triples)"""
+    # Delete annotations first
+    db.query(models.Annotation).filter(
+        models.Annotation.triple_id == triple_id
+    ).delete()
+    
+    # Get triple to find PMID
+    triple = db.query(models.Triple).filter(models.Triple.id == triple_id).first()
+    if not triple:
+        raise HTTPException(status_code=404, detail="Triple not found")
+    
+    pmid = triple.pmid
+    
+    # Delete the triple
+    db.query(models.Triple).filter(models.Triple.id == triple_id).delete()
+    
+    # Check if article has any remaining triples
+    remaining = db.query(models.Triple).filter(models.Triple.pmid == pmid).count()
+    
+    if remaining == 0:
+        # Delete the article if no triples left
+        db.query(models.Article).filter(models.Article.pmid == pmid).delete()
+        db.commit()
+        return {"message": "Triple and empty article deleted", "article_deleted": True}
+    
+    db.commit()
+    return {"message": "Triple deleted", "article_deleted": False}
+
+@app.post("/admin/triple/{triple_id}/reassign")
+def reassign_flagged_triple(triple_id: int, new_annotator: str, db: Session = Depends(get_db)):
+    """Reassign a flagged triple to another annotator"""
+    # Remove existing annotation
+    db.query(models.Annotation).filter(
+        models.Annotation.triple_id == triple_id
+    ).delete()
+    
+    # Get triple and article
+    triple = db.query(models.Triple).filter(models.Triple.id == triple_id).first()
+    if not triple:
+        raise HTTPException(status_code=404, detail="Triple not found")
+    
+    # Ensure new annotator has assignment for this article
+    assignment = db.query(models.ArticleAssignment).filter(
+        models.ArticleAssignment.pmid == triple.pmid,
+        models.ArticleAssignment.annotator == new_annotator
+    ).first()
+    
+    if not assignment:
+        assignment = models.ArticleAssignment(
+            pmid=triple.pmid,
+            annotator=new_annotator
+        )
+        db.add(assignment)
+    
+    db.commit()
+    return {"message": f"Triple reassigned to {new_annotator}"}
 
 @app.get("/progress", response_model=schemas.ProgressResponse)
 def get_progress(annotator: str = "default", db: Session = Depends(get_db)):

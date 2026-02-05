@@ -129,17 +129,23 @@ Frontend runs on `http://localhost:5173`
 helm install annotation-ui ./helm/annotation-ui -n  --create-namespace
 ```
 
-**Load corpus data:**
+**Load corpus data into Kubernetes:**
+
 ```bash
-# Get backend pod name
-kubectl get pods -n 
+# Get backend pod name so you can identify the backend pod name
+kubectl get pods -n <namesapce>
 
 # Copy corpus file
-kubectl cp corpus.json /:/app/corpus.json
+kubectl cp corpus.json <nmespace>/<backend-podname>:/app/corpus.json
 
 # Exec into pod and load
-kubectl exec -it -n   -- bash
+kubectl exec -it -n  <namespace> <backend-podname> -- bash
+
+# Inside the pod, run:**
+ls -la  # Check if corpus.json is there
 python load_corpus.py corpus.json
+
+# Exit the pod
 exit
 ```
 
@@ -252,24 +258,6 @@ npm test
 # E2E tests
 npm run test:e2e
 ```
-
-### Loading the Data into Kubernetes 
-**shows you all available pods**
-
-- `kubectl get pod - <namesapce>`  so you can identify the backen'd pod name
-
-**Copy corpus to the running pod** 
-- `kubectl cp corpus_filename.json <namespace>/<podname>:/app/corpus.json`
-
-**Exec into pod**
-- `kubectl exec -it -n <namespace> <podname> -- bash`
-
-**Inside the pod, run:**
-- `ls -la`  # Check if corpus.json is there
-- `python load_corpus.py corpus.json`
-
-**Exit**
-- exit
 
 ## Contributing
 

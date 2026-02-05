@@ -78,8 +78,45 @@ export const api = {
     const response = await axios.delete(`${API_BASE}/admin/annotator/${annotator}`);
     return response.data;
   },
+  
   resetAnnotator: async (annotator: string) => {
     const response = await axios.post(`${API_BASE}/admin/annotator/${annotator}/reset`);
+    return response.data;
+  },
+
+  exportAnnotations: async (annotator?: string, status: 'all' | 'completed' | 'partial' = 'all') => {
+    const params = new URLSearchParams();
+    if (annotator) params.append('annotator', annotator);
+    params.append('status', status);
+    
+    const response = await axios.get(`${API_BASE}/admin/export/annotations?${params}`, {
+      responseType: 'blob'
+    });
+    
+    // Trigger download
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `annotations_${annotator || 'all'}_${status}.json`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  },
+  
+  getAllFlagged: async () => {
+    const response = await axios.get(`${API_BASE}/admin/flagged`);
+    return response.data;
+  },
+  
+  deleteTriple: async (tripleId: number) => {
+    const response = await axios.delete(`${API_BASE}/admin/triple/${tripleId}`);
+    return response.data;
+  },
+  
+  reassignTriple: async (tripleId: number, newAnnotator: string) => {
+    const response = await axios.post(`${API_BASE}/admin/triple/${tripleId}/reassign`, null, {
+      params: { new_annotator: newAnnotator }
+    });
     return response.data;
   },
 };
@@ -89,11 +126,12 @@ export interface AnnotatorInfo {
   assigned_count: number;
   completed_count: number;
   pending_count: number;
-}
+};
 
 export interface AdminStats {
   total_articles: number;
   total_assigned: number;
   total_unassigned: number;
   total_completed: number;
-}
+};
+

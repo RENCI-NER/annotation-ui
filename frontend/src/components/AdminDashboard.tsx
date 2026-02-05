@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api, AnnotatorInfo, AdminStats } from '../api';
+import { AdminFlaggedReview } from './AdminFlaggedReview';
+
 
 export const AdminDashboard: React.FC = () => {
   const [annotators, setAnnotators] = useState<AnnotatorInfo[]>([]);
@@ -8,7 +10,9 @@ export const AdminDashboard: React.FC = () => {
   const [numArticles, setNumArticles] = useState(100);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showFlaggedReview, setShowFlaggedReview] = useState(false);
 
+  
   useEffect(() => {
     loadData();
   }, []);
@@ -112,6 +116,52 @@ export const AdminDashboard: React.FC = () => {
               <div className="text-2xl font-bold text-purple-600">{stats.total_completed}</div>
               <div className="text-sm text-gray-600">Completed</div>
             </div>
+          </div>
+        )}
+
+        {/* Export and Flagged Review Buttons */}
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          {/* Export Section */}
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h3 className="text-lg font-semibold mb-4">Export Annotations</h3>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => api.exportAnnotations(undefined, 'all')}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
+              >
+                📥 Export All
+              </button>
+              <button
+                onClick={() => api.exportAnnotations(undefined, 'completed')}
+                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg"
+              >
+                ✅ Export Completed Only
+              </button>
+              <button
+                onClick={() => api.exportAnnotations(undefined, 'partial')}
+                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg"
+              >
+                ⏳ Export Partial
+              </button>
+            </div>
+          </div>
+
+          {/* Flagged Review Section */}
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h3 className="text-lg font-semibold mb-4">Review Flagged Triples</h3>
+            <button
+              onClick={() => setShowFlaggedReview(!showFlaggedReview)}
+              className="w-full px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg"
+            >
+              {showFlaggedReview ? '✕ Close Review' : '🚩 Review All Flagged Triples'}
+            </button>
+          </div>
+        </div>
+
+        {/* Flagged Review Panel */}
+        {showFlaggedReview && (
+          <div className="mb-8">
+            <AdminFlaggedReview />
           </div>
         )}
 
@@ -243,6 +293,7 @@ export const AdminDashboard: React.FC = () => {
             </div>
           )}
         </div>
+
       </div>
     </div>
   );

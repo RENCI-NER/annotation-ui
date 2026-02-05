@@ -30,6 +30,18 @@ class TripleResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class FlaggedTripleInfo(BaseModel):
+    triple_id: int
+    pmid: str
+    article_title: str
+    subject_text: str
+    object_text: str
+    relationship: Optional[str]
+    annotator: str
+    predicate: Optional[str]
+    notes: Optional[str]
+    flagged_at: datetime
+    
 class ArticleResponse(BaseModel):
     pmid: str
     title: str
