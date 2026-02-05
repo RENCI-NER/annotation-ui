@@ -259,14 +259,14 @@ npm run test:e2e
 - `kubectl get pod - <namesapce>`  so you can identify the backen'd pod name
 
 **Copy corpus to the running pod** 
-- kubectl cp corpus_filename.json <namespace>/<podname>>:/app/corpus.json
+- `kubectl cp corpus_filename.json <namespace>/<podname>:/app/corpus.json`
 
 **Exec into pod**
-- kubectl exec -it -n <namespace> <podname> -- bash
+- `kubectl exec -it -n <namespace> <podname> -- bash`
 
 **Inside the pod, run:**
-- ls -la  # Check if corpus.json is there
-- python load_corpus.py corpus.json
+- `ls -la`  # Check if corpus.json is there
+- `python load_corpus.py corpus.json`
 
 **Exit**
 - exit
