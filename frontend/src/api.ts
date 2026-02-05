@@ -25,13 +25,15 @@ export const api = {
 
   getNextArticle: async (annotator: string = 'default'): Promise<Article> => {
     const response = await axios.get(`${API_BASE}/articles/next/unannotated`, {
-      params: { annotator }
+      params: { annotator }  
     });
     return response.data;
   },
 
-  getArticle: async (pmid: string): Promise<Article> => {
-    const response = await axios.get(`${API_BASE}/articles/${pmid}`);
+  getArticle: async (pmid: string, annotator: string = 'default'): Promise<Article> => {
+    const response = await axios.get(`${API_BASE}/articles/${pmid}`, {
+      params: { annotator }  
+    });
     return response.data;
   },
 
@@ -75,7 +77,11 @@ export const api = {
   deleteAnnotatorAssignments: async (annotator: string) => {
     const response = await axios.delete(`${API_BASE}/admin/annotator/${annotator}`);
     return response.data;
-  }
+  },
+  resetAnnotator: async (annotator: string) => {
+    const response = await axios.post(`${API_BASE}/admin/annotator/${annotator}/reset`);
+    return response.data;
+  },
 };
 
 export interface AnnotatorInfo {
@@ -91,4 +97,3 @@ export interface AdminStats {
   total_unassigned: number;
   total_completed: number;
 }
-

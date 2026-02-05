@@ -1,52 +1,86 @@
 import React from 'react';
-import { Entity } from '../types';
+import { Entity, Triple } from '../types';
 
 interface Props {
   abstract: string;
   highlightedEntities: [Entity, Entity];
+  currentTriple?: Triple;
 }
 
-export const AbstractView: React.FC<Props> = ({ abstract, highlightedEntities }) => {
+export const AbstractView: React.FC<Props> = ({ abstract, highlightedEntities, currentTriple }) => {
   const [subject, object] = highlightedEntities;
 
   const renderHighlightedText = () => {
-    const segments: Array<{ text: string; type?: 'subject' | 'object' }> = [];
-    const entities = [
-      { ...subject, type: 'subject' as const },
-      { ...object, type: 'object' as const }
-    ].sort((a, b) => a.start_pos - b.start_pos);
-
-    let lastPos = 0;
-
-    entities.forEach(entity => {
-      if (entity.start_pos > lastPos) {
-        segments.push({
-          text: abstract.slice(lastPos, entity.start_pos)
+    const segments: Array<{ text: string; type?: 'subject' | 'object' | 'relationship' }> = [];
+    
+    // Explicitly type the highlights array
+    const highlights: Array<{ start: number; end: number; type: 'subject' | 'object' | 'relationship' }> = [
+      { start: subject.start_pos, end: subject.end_pos, type: 'subject' as const },
+      { start: object.start_pos, end: object.end_pos, type: 'object' as const }
+    ];
+    
+    if (currentTriple?.llm_suggestion) {
+      const relationshipText = currentTriple.llm_suggestion.toLowerCase();
+      const abstractLower = abstract.toLowerCase();
+      
+      // Find relationship text between subject and object
+      const searchStart = Math.min(subject.end_pos, object.end_pos);
+      const searchEnd = Math.max(subject.start_pos, object.start_pos);
+      const searchRegion = abstractLower.slice(searchStart, searchEnd);
+      
+      const relIndex = searchRegion.indexOf(relationshipText);
+      if (relIndex !== -1) {
+        const actualStart = searchStart + relIndex;
+        const actualEnd = actualStart + relationshipText.length;
+        highlights.push({
+          start: actualStart,
+          end: actualEnd,
+          type: 'relationship'  // Now this works
         });
       }
+    }
+  
+    highlights.sort((a, b) => a.start - b.start);
+  
+    let lastPos = 0;
+    highlights.forEach(highlight => {
+      // Add text before highlight
+      if (highlight.start > lastPos) {
+        segments.push({
+          text: abstract.slice(lastPos, highlight.start)
+        });
+      }
+      // Add highlighted text
       segments.push({
-        text: abstract.slice(entity.start_pos, entity.end_pos),
-        type: entity.type
+        text: abstract.slice(highlight.start, highlight.end),
+        type: highlight.type
       });
-      lastPos = entity.end_pos;
+      lastPos = highlight.end;
     });
-
+  
+    // Add remaining text
     if (lastPos < abstract.length) {
       segments.push({
         text: abstract.slice(lastPos)
       });
     }
-
+  
     return segments.map((segment, i) => {
       if (segment.type === 'subject') {
         return (
-          <mark key={i} className="bg-blue-200 text-blue-900 px-1 py-0.5 rounded font-semibold">
+          <mark key={i} className="bg-blue-200 dark:bg-blue-800 text-blue-900 dark:text-blue-100 px-1 py-0.5 rounded font-semibold">
             {segment.text}
           </mark>
         );
       } else if (segment.type === 'object') {
         return (
-          <mark key={i} className="bg-red-200 text-red-900 px-1 py-0.5 rounded font-semibold">
+          <mark key={i} className="bg-red-200 dark:bg-red-800 text-red-900 dark:text-red-100 px-1 py-0.5 rounded font-semibold">
+            {segment.text}
+          </mark>
+        );
+      } else if (segment.type === 'relationship') {
+        return (
+          <mark key={i} className="bg-yellow-200 dark:bg-yellow-700 text-yellow-900 dark:text-yellow-100 px-1 py-0.5 rounded font-semibold">
             {segment.text}
           </mark>
         );
@@ -56,44 +90,14 @@ export const AbstractView: React.FC<Props> = ({ abstract, highlightedEntities })
   };
 
   return (
-    <div className="h-full flex flex-col bg-white rounded-xl shadow-lg border-l-4 border-blue-500 overflow-hidden">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-          <span>📄</span>
-          <span>Abstract & Entities</span>
-        </h3>
+    <div className="h-full flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+      <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">📄 Abstract & Entities</h3>
       </div>
-      
 
-      {/* Abstract Text */}
-      <div className="flex-1 overflow-y-auto px-6 py-5">
-        <div className="text-gray-800 leading-relaxed text-[15px]">
+      <div className="flex-1 overflow-y-auto px-3 py-3">
+        <div className="text-gray-800 dark:text-gray-200 leading-relaxed text-sm">
           {renderHighlightedText()}
-        </div>
-      </div>
-
-      {/* Entity Info Footer */}
-      <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div className="bg-white p-3 rounded-lg border border-blue-200">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-3 h-3 bg-blue-200 rounded"></div>
-              <span className="text-xs font-semibold text-gray-500 uppercase">Subject</span>
-            </div>
-            <div className="font-semibold text-gray-800">{subject.text}</div>
-            <div className="text-xs text-gray-500 mt-1">{subject.normalized_id}</div>
-            <div className="text-xs text-gray-500 mt-1">{subject.biolink_types?.[0]}</div>
-          </div>
-          <div className="bg-white p-3 rounded-lg border border-red-200">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-3 h-3 bg-red-200 rounded"></div>
-              <span className="text-xs font-semibold text-gray-500 uppercase">Object</span>
-            </div>
-            <div className="font-semibold text-gray-800">{object.text}</div>
-            <div className="text-xs text-gray-500 mt-1">{object.normalized_id}</div>
-            <div className="text-xs text-gray-500 mt-1">{object.biolink_types?.[0]}</div>
-          </div>
         </div>
       </div>
     </div>

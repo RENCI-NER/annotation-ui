@@ -1,37 +1,22 @@
-// frontend/src/App.tsx - REPLACE ENTIRE FILE
-
 import React, { useState, useEffect } from 'react';
 import { AbstractView } from './components/AbstractView';
 import { AnnotationPanel } from './components/AnnotationPanel';
 import { ProgressBar } from './components/ProgressBar';
 import { AdminDashboard } from './components/AdminDashboard';
-import { Login } from './components/Login'; 
+import { Login } from './components/Login';
+import { useTheme } from './contexts/ThemeContext';
 import { api } from './api';
+import { CompletionModal } from './components/CompletionModal';
 import { Article, Progress, Stats } from './types';
 
 type Mode = 'normal' | 'review-skipped' | 'review-flagged';
 
 function App() {
-  const isAdminPage = window.location.pathname === '/admin' || 
-                      new URLSearchParams(window.location.search).get('admin') === 'true';
-  if (isAdminPage) {
-    return <AdminDashboard />;
-  }
-
+  // ============ ALL HOOKS FIRST ============
+  const { theme, toggleTheme } = useTheme();
   const [annotator, setAnnotator] = useState<string | null>(() => {
     return localStorage.getItem('annotator');
   });
-
-  if (!annotator) {
-    return (
-      <Login
-        onLogin={(name) => {
-          localStorage.setItem('annotator', name);
-          setAnnotator(name);
-        }}
-      />
-    );
-  }
   const [article, setArticle] = useState<Article | null>(null);
   const [currentTripleIndex, setCurrentTripleIndex] = useState(0);
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -41,12 +26,16 @@ function App() {
   const [mode, setMode] = useState<Mode>('normal');
   const [reviewPmids, setReviewPmids] = useState<string[]>([]);
   const [reviewIndex, setReviewIndex] = useState(0);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
 
+
+  // ============ ALL FUNCTIONS NEXT ============
   const loadArticle = async () => {
+    if (!annotator) return;
     try {
       setLoading(true);
       setError(null);
-      const data = await api.getNextArticle();
+      const data = await api.getNextArticle(annotator);
       setArticle(data);
       setCurrentTripleIndex(0);
     } catch (err: any) {
@@ -57,13 +46,13 @@ function App() {
   };
 
   const loadSpecificArticle = async (pmid: string) => {
+    if (!annotator) return;
     try {
       setLoading(true);
       setError(null);
-      const data = await api.getArticle(pmid);
+      const data = await api.getArticle(pmid, annotator);
       setArticle(data);
       
-      // Find first skipped/flagged triple
       let firstIndex = 0;
       if (mode === 'review-skipped') {
         firstIndex = data.triples.findIndex(t => t.skipped);
@@ -80,6 +69,7 @@ function App() {
   };
 
   const enterReviewMode = async (reviewMode: 'review-skipped' | 'review-flagged') => {
+    if (!annotator) return;
     try {
       setLoading(true);
       const pmids = reviewMode === 'review-skipped' 
@@ -115,7 +105,6 @@ function App() {
       setReviewIndex(nextIndex);
       loadSpecificArticle(reviewPmids[nextIndex]);
     } else {
-      // Finished reviewing
       exitReviewMode();
     }
   };
@@ -129,6 +118,7 @@ function App() {
   };
 
   const loadProgress = async () => {
+    if (!annotator) return;
     try {
       const data = await api.getProgress(annotator);
       setProgress(data);
@@ -138,6 +128,7 @@ function App() {
   };
 
   const loadStats = async () => {
+    if (!annotator) return;
     try {
       const data = await api.getStats(annotator);
       setStats(data);
@@ -146,15 +137,8 @@ function App() {
     }
   };
 
-  useEffect(() => {
-    loadArticle();
-    loadProgress();
-    loadStats();
-  }, []);
-
   const handleAnnotate = async (predicate: string, confidence: string, notes?: string) => {
-    if (!article) return;
-
+    if (!article || !annotator) return;
     const triple = article.triples[currentTripleIndex];
 
     try {
@@ -181,16 +165,25 @@ function App() {
 
       loadProgress();
       loadStats();
+
+      if (currentTripleIndex === article.triples.length - 1) {
+        // Last triple - show completion modal
+        setShowCompletionModal(true);
+      } else {
+        // Auto-advance to next triple
+        setTimeout(() => {
+          setCurrentTripleIndex(currentTripleIndex + 1);
+        }, 500);
+      }
     } catch (err) {
       console.error('Failed to save annotation:', err);
     }
   };
 
   const handleSkip = async () => {
-    if (!article) return;
-
+    if (!article || !annotator) return;
     const triple = article.triples[currentTripleIndex];
-
+  
     try {
       await api.saveAnnotation({
         triple_id: triple.id,
@@ -199,29 +192,27 @@ function App() {
         flagged: false,
         annotator
       });
-
-      loadProgress();
-      loadStats();
-
-      if (currentTripleIndex < article.triples.length - 1) {
-        setCurrentTripleIndex(currentTripleIndex + 1);
+  
+      await loadProgress();
+      await loadStats();
+  
+      // Only one advancement logic
+      if (currentTripleIndex === article.triples.length - 1) {
+        setShowCompletionModal(true);
       } else {
-        if (mode === 'review-skipped') {
-          nextReviewArticle();
-        } else {
-          loadArticle();
-        }
+        setTimeout(() => {
+          setCurrentTripleIndex(currentTripleIndex + 1);
+        }, 300);
       }
     } catch (err) {
       console.error('Failed to skip:', err);
     }
   };
-
+  
   const handleFlag = async () => {
-    if (!article) return;
-
+    if (!article || !annotator) return;
     const triple = article.triples[currentTripleIndex];
-
+  
     try {
       await api.saveAnnotation({
         triple_id: triple.id,
@@ -230,22 +221,35 @@ function App() {
         flagged: true,
         annotator
       });
-
-      loadProgress();
-      loadStats();
-
-      if (currentTripleIndex < article.triples.length - 1) {
-        setCurrentTripleIndex(currentTripleIndex + 1);
+  
+      await loadProgress();
+      await loadStats();
+  
+      // Only one advancement logic
+      if (currentTripleIndex === article.triples.length - 1) {
+        setShowCompletionModal(true);
       } else {
-        if (mode === 'review-flagged') {
-          nextReviewArticle();
-        } else {
-          loadArticle();
-        }
+        setTimeout(() => {
+          setCurrentTripleIndex(currentTripleIndex + 1);
+        }, 300);
       }
     } catch (err) {
       console.error('Failed to flag:', err);
     }
+  };
+
+  const handleContinueToNextArticle = () => {
+    setShowCompletionModal(false);
+    if (mode.startsWith('review-')) {
+      nextReviewArticle();
+    } else {
+      loadArticle();
+    }
+  };
+
+  const handleReviewArticle = () => {
+    setShowCompletionModal(false);
+    setCurrentTripleIndex(0); // Go back to first triple
   };
 
   const handlePrevious = () => {
@@ -256,7 +260,6 @@ function App() {
 
   const handleNext = () => {
     if (!article) return;
-
     if (currentTripleIndex < article.triples.length - 1) {
       setCurrentTripleIndex(currentTripleIndex + 1);
     } else {
@@ -268,24 +271,70 @@ function App() {
     }
   };
 
+  // ============ useEffect AFTER ALL FUNCTIONS ============
+  useEffect(() => {
+    if (annotator && !isAdminPage) {
+      loadArticle();
+      loadProgress();
+      loadStats();
+    }
+  }, [annotator]);
+
+  // ============ NOW CONDITIONALS AND RETURNS ============
+  const isAdminPage = window.location.pathname === '/admin' || 
+                      new URLSearchParams(window.location.search).get('admin') === 'true';
+
+  if (isAdminPage) {
+    return <AdminDashboard />;
+  }
+
+  if (!annotator) {
+    return (
+      <Login
+        onLogin={(name) => {
+          localStorage.setItem('annotator', name);
+          setAnnotator(name);
+        }}
+      />
+    );
+  }
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="text-4xl mb-4">⏳</div>
-          <div className="text-lg text-gray-600">Loading annotation task...</div>
+          <div className="text-lg text-gray-600 dark:text-gray-300">Loading...</div>
         </div>
       </div>
     );
   }
 
   if (error) {
+    const isCompleted = error.includes("completed");
+    
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="text-4xl mb-4">🎉</div>
-          <div className="text-2xl font-bold mb-2">All Done!</div>
-          <div className="text-gray-600">{error}</div>
+          <div className="text-2xl font-bold mb-2 dark:text-white">
+            {isCompleted ? "All Assigned Articles Completed!" : "All Done!"}
+          </div>
+          <div className="text-gray-600 dark:text-gray-300 mb-4">{error}</div>
+          {isCompleted && (
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  setError(null);
+                  loadArticle();
+                }}
+                className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
+              >
+                Review My Annotations
+              </button>
+              <p className="text-sm text-gray-500">You can review and edit your completed work</p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -293,11 +342,11 @@ function App() {
 
   if (!article || article.triples.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="text-4xl mb-4">🎉</div>
-          <div className="text-2xl font-bold mb-2">No More Articles!</div>
-          <div className="text-gray-600">You've completed all annotations.</div>
+          <div className="text-2xl font-bold mb-2 dark:text-white">No More Articles!</div>
+          <div className="text-gray-600 dark:text-gray-300">Completed all annotations.</div>
         </div>
       </div>
     );
@@ -305,12 +354,19 @@ function App() {
 
   const currentTriple = article.triples[currentTripleIndex];
 
+  // ============ MAIN RENDER ============
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b border-gray-200">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {showCompletionModal && (
+        <CompletionModal
+          onContinue={handleContinueToNextArticle}
+          onReview={handleReviewArticle}
+        />
+      )}
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-800">
+            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
               🔬 RELATE Annotation Interface
             </h1>
             <div className="flex items-center gap-4">
@@ -318,11 +374,11 @@ function App() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={exitReviewMode}
-                    className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg"
+                    className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg dark:text-gray-200"
                   >
                     ← Exit Review Mode
                   </button>
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-gray-600 dark:text-gray-300">
                     {mode === 'review-skipped' ? '⏭️ Reviewing Skipped' : '🚩 Reviewing Flagged'}
                     {' '}({reviewIndex + 1}/{reviewPmids.length})
                   </div>
@@ -346,13 +402,21 @@ function App() {
               )}
               <button
                 onClick={() => window.location.reload()}
-                className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg"
+                className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg dark:text-gray-200"
               >
                 Refresh
               </button>
+              
+              <button
+                onClick={toggleTheme}
+                className="p-2 text-2xl hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                title="Toggle theme"
+              >
+                {theme === 'light' ? '🌙' : '☀️'}
+              </button>
 
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">👤 {annotator}</span>
+                <span className="text-sm text-gray-600 dark:text-gray-300">👤 {annotator}</span>
                 <button
                   onClick={() => {
                     localStorage.removeItem('annotator');
@@ -373,13 +437,13 @@ function App() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 mb-4">
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm text-gray-500">PMID: {article.pmid}</div>
-              <div className="font-semibold text-gray-800">{article.title}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">PMID: {article.pmid}</div>
+              <div className="font-semibold text-gray-800 dark:text-white">{article.title}</div>
             </div>
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-gray-600 dark:text-gray-300">
               Year: {article.year} | {article.target_entity_count} target entities
             </div>
           </div>
@@ -387,10 +451,11 @@ function App() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 pb-8">
-        <div className="grid grid-cols-2 gap-4" style={{ height: 'calc(100vh - 320px)' }}>
+        <div className="grid grid-cols-2 gap-2" style={{ height: 'calc(100vh - 280px)' }}>
           <AbstractView
             abstract={article.abstract}
             highlightedEntities={[currentTriple.subject, currentTriple.object]}
+            currentTriple={currentTriple}
           />
           <AnnotationPanel
             triple={currentTriple}

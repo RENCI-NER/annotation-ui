@@ -78,93 +78,91 @@ def get_next_unannotated_article(annotator: str = "default", db: Session = Depen
         models.ArticleAssignment.annotator == annotator
     ).all()
     
-    if assignments:
-        assigned_pmids = [a.pmid for a in assignments]
-        
-        for pmid in assigned_pmids:
-            article = db.query(models.Article).filter(
-                models.Article.pmid == pmid
-            ).first()
-            
-            if not article:
-                continue
-            
-            has_unannotated = False
-            for triple in article.triples:
-                annotation = db.query(models.Annotation).filter(
-                    models.Annotation.triple_id == triple.id,
-                    models.Annotation.annotator == annotator
-                ).first()
-                
-                if not annotation:
-                    has_unannotated = True
-                    break
-            
-            if has_unannotated:
-                for t in article.triples:
-                    ann = db.query(models.Annotation).filter(
-                        models.Annotation.triple_id == t.id,
-                        models.Annotation.annotator == annotator
-                    ).first()
-                    
-                    if ann:
-                        t.predicate = ann.predicate
-                        t.confidence = ann.confidence
-                        t.notes = ann.notes
-                        t.skipped = ann.skipped
-                        t.flagged = ann.flagged
-                    else:
-                        t.predicate = None
-                        t.confidence = None
-                        t.notes = None
-                        t.skipped = False
-                        t.flagged = False
-                
-                return article
-        
+    if not assignments:
         raise HTTPException(
             status_code=404,
-            detail=f"All your assigned articles are completed!"
+            detail=f"No articles assigned to {annotator}. Contact admin to assign articles."
         )
     
-    else:
-        articles = db.query(models.Article).all()
-        for article in articles:
-            has_unannotated = False
-            for triple in article.triples:
-                annotation = db.query(models.Annotation).filter(
-                    models.Annotation.triple_id == triple.id,
+    assigned_pmids = [a.pmid for a in assignments]
+    
+    # Find first assigned article with unannotated triples
+    for pmid in assigned_pmids:
+        article = db.query(models.Article).filter(
+            models.Article.pmid == pmid
+        ).first()
+        
+        if not article:
+            continue
+        
+        has_unannotated = False
+        for triple in article.triples:
+            annotation = db.query(models.Annotation).filter(
+                models.Annotation.triple_id == triple.id,
+                models.Annotation.annotator == annotator
+            ).first()
+            
+            if not annotation:
+                has_unannotated = True
+                break
+        
+        if has_unannotated:
+            # Attach annotations
+            for t in article.triples:
+                ann = db.query(models.Annotation).filter(
+                    models.Annotation.triple_id == t.id,
                     models.Annotation.annotator == annotator
                 ).first()
-                if not annotation:
-                    has_unannotated = True
-                    break
+                
+                if ann:
+                    t.predicate = ann.predicate
+                    t.confidence = ann.confidence
+                    t.notes = ann.notes
+                    t.skipped = ann.skipped
+                    t.flagged = ann.flagged
+                else:
+                    t.predicate = None
+                    t.confidence = None
+                    t.notes = None
+                    t.skipped = False
+                    t.flagged = False
             
-            if has_unannotated:
-                for t in article.triples:
-                    ann = db.query(models.Annotation).filter(
-                        models.Annotation.triple_id == t.id,
-                        models.Annotation.annotator == annotator
-                    ).first()
-                    if ann:
-                        t.predicate = ann.predicate
-                        t.confidence = ann.confidence
-                        t.notes = ann.notes
-                        t.skipped = ann.skipped
-                        t.flagged = ann.flagged
-                return article
+            return article
+    
+    # All completed - return first article for review
+    if assigned_pmids:
+        first_article = db.query(models.Article).filter(
+            models.Article.pmid == assigned_pmids[0]
+        ).first()
         
-        raise HTTPException(
-            status_code=404,
-            detail="No unannotated articles remaining"
-        )
-
+        if first_article:
+            for t in first_article.triples:
+                ann = db.query(models.Annotation).filter(
+                    models.Annotation.triple_id == t.id,
+                    models.Annotation.annotator == annotator
+                ).first()
+                
+                if ann:
+                    t.predicate = ann.predicate
+                    t.confidence = ann.confidence
+                    t.notes = ann.notes
+                    t.skipped = ann.skipped
+                    t.flagged = ann.flagged
+            
+            return first_article
+    
+    raise HTTPException(
+        status_code=404,
+        detail=f"No articles available"
+    )
+    
 @app.post("/annotations", response_model=schemas.AnnotationResponse)
 def create_annotation(annotation: schemas.AnnotationCreate, db: Session = Depends(get_db)):
     existing = db.query(models.Annotation).filter(
         models.Annotation.triple_id == annotation.triple_id,
         models.Annotation.annotator == annotation.annotator
     ).first()
+    
     if existing:
         existing.predicate = annotation.predicate
         existing.confidence = annotation.confidence
@@ -174,14 +172,40 @@ def create_annotation(annotation: schemas.AnnotationCreate, db: Session = Depend
         existing.updated_at = datetime.now()
         db.commit()
         db.refresh(existing)
-        return existing
     else:
         db_annotation = models.Annotation(**annotation.model_dump())
         db.add(db_annotation)
         db.commit()
         db.refresh(db_annotation)
         update_annotator_stats(annotation.annotator, db)
-        return db_annotation
+    
+    # Check if article is now complete
+    triple = db.query(models.Triple).filter(models.Triple.id == annotation.triple_id).first()
+    if triple:
+        article = db.query(models.Article).filter(models.Article.pmid == triple.pmid).first()
+        if article:
+            # Check if all triples in this article are annotated
+            all_annotated = True
+            for t in article.triples:
+                ann = db.query(models.Annotation).filter(
+                    models.Annotation.triple_id == t.id,
+                    models.Annotation.annotator == annotation.annotator
+                ).first()
+                if not ann:
+                    all_annotated = False
+                    break
+            
+            # Update assignment completion
+            if all_annotated:
+                assignment = db.query(models.ArticleAssignment).filter(
+                    models.ArticleAssignment.pmid == triple.pmid,
+                    models.ArticleAssignment.annotator == annotation.annotator
+                ).first()
+                if assignment:
+                    assignment.completed = True
+                    db.commit()
+    
+    return existing if existing else db_annotation
 
 @app.get("/admin/annotators", response_model=List[schemas.AnnotatorInfo])
 def get_annotators(db: Session = Depends(get_db)):
@@ -261,23 +285,79 @@ def delete_annotator_assignments(annotator: str, db: Session = Depends(get_db)):
     
     return {"message": f"Deleted {deleted} assignments for {annotator}"}
 
+@app.post("/admin/annotator/{annotator}/reset")
+def reset_annotator(annotator: str, db: Session = Depends(get_db)):
+    """Reset annotator - delete all their annotations but keep assignments"""
+    
+    # Delete all annotations for this annotator
+    deleted_annotations = db.query(models.Annotation).filter(
+        models.Annotation.annotator == annotator
+    ).delete()
+    
+    # Reset their stats
+    stats = db.query(models.AnnotatorStats).filter(
+        models.AnnotatorStats.annotator == annotator
+    ).first()
+    
+    if stats:
+        stats.total_annotations = 0
+        stats.streak_days = 0
+        stats.last_annotation_date = None
+        stats.achievements = []
+    
+    # Mark all their assignments as incomplete
+    assignments = db.query(models.ArticleAssignment).filter(
+        models.ArticleAssignment.annotator == annotator
+    ).all()
+    
+    for assignment in assignments:
+        assignment.completed = False
+    
+    db.commit()
+    
+    return {
+        "message": f"Reset {annotator}: deleted {deleted_annotations} annotations",
+        "annotator": annotator,
+        "deleted_annotations": deleted_annotations
+    }
+
 @app.get("/progress", response_model=schemas.ProgressResponse)
 def get_progress(annotator: str = "default", db: Session = Depends(get_db)):
-    total_articles = db.query(models.Article).count()
-    total_triples = db.query(models.Triple).count()
+    assignments = db.query(models.ArticleAssignment).filter(
+        models.ArticleAssignment.annotator == annotator
+    ).all()
+    
+    assigned_pmids = [a.pmid for a in assignments]
+    total_articles = len(assigned_pmids)
+    
+    total_triples = 0
+    for pmid in assigned_pmids:
+        article = db.query(models.Article).filter(models.Article.pmid == pmid).first()
+        if article:
+            total_triples += len(article.triples)
     
     annotations = db.query(models.Annotation).filter(
         models.Annotation.annotator == annotator
     ).all()
     
-    annotated_triples = len([a for a in annotations if a.predicate])
+    # Only count annotations with actual values
+    annotated_triples = len([a for a in annotations if a.predicate and not a.skipped and not a.flagged])
     skipped_triples = len([a for a in annotations if a.skipped])
     flagged_triples = len([a for a in annotations if a.flagged])
-    unannotated_triples = total_triples - len(annotations)
+    
+    # Triples that have NO annotation at all
+    annotated_triple_ids = {a.triple_id for a in annotations}
+    all_triple_ids = set()
+    for pmid in assigned_pmids:
+        article = db.query(models.Article).filter(models.Article.pmid == pmid).first()
+        if article:
+            all_triple_ids.update([t.id for t in article.triples])
+    
+    unannotated_triples = len(all_triple_ids - annotated_triple_ids)
     
     annotated_articles = len(set([
         db.query(models.Triple).filter(models.Triple.id == a.triple_id).first().pmid
-        for a in annotations if a.predicate
+        for a in annotations if a.predicate and not a.skipped and not a.flagged
     ]))
     
     completion_pct = (len(annotations) / total_triples * 100) if total_triples > 0 else 0

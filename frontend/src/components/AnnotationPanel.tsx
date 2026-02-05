@@ -31,6 +31,7 @@ export const AnnotationPanel: React.FC<Props> = ({
   const [confidence, setConfidence] = useState(triple.confidence || 'medium');
   const [notes, setNotes] = useState(triple.notes || '');
   const [showSaved, setShowSaved] = useState(false);
+  const [autoAdvancing, setAutoAdvancing] = useState(false); 
   const [searchTerm, setSearchTerm] = useState('');
 
   // Smart search with LLM suggestion prioritization
@@ -53,12 +54,12 @@ export const AnnotationPanel: React.FC<Props> = ({
     setSelectedPredicate(predicate);
     onAnnotate(predicate, confidence, notes);
     setShowSaved(true);
-    setTimeout(() => setShowSaved(false), 1000);
+    setAutoAdvancing(true);
+    
     setTimeout(() => {
-      if (tripleIndex < totalTriples - 1) {
-        onNext();
-      }
-    }, 500);
+      setShowSaved(false);
+      setAutoAdvancing(false);
+    }, 1000);
   };
 
   const handleConfidenceChange = (conf: string) => {
@@ -69,6 +70,16 @@ export const AnnotationPanel: React.FC<Props> = ({
   };
 
   const handleKeyPress = (e: KeyboardEvent) => {
+    // Ignore keyboard shortcuts when typing in input/textarea
+    const target = e.target as HTMLElement;
+    if (
+      target.tagName === 'INPUT' || 
+      target.tagName === 'TEXTAREA' ||
+      target.isContentEditable
+    ) {
+      return;
+    }
+  
     if (e.key === ' ') {
       e.preventDefault();
       onSkip();
@@ -77,10 +88,11 @@ export const AnnotationPanel: React.FC<Props> = ({
     } else if (e.key === 'ArrowLeft') {
       onPrevious();
     } else if (e.key === 'f' || e.key === 'F') {
+      e.preventDefault();
       onFlag();
     }
   };
-
+  
   useEffect(() => {
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
@@ -95,9 +107,9 @@ export const AnnotationPanel: React.FC<Props> = ({
   }
 
   return (
-    <div className="h-full flex flex-col p-6 bg-white rounded-xl shadow-lg border-l-4 border-purple-500">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-800">✍️ Annotation</h3>
+    <div className="h-full flex flex-col p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-semibold text-gray-800 dark:text-white">✍️ Annotation</h3>
         <div className="flex items-center gap-2">
           <AnimatePresence>
             {showSaved && (
@@ -110,8 +122,18 @@ export const AnnotationPanel: React.FC<Props> = ({
                 ✓ Saved
               </motion.div>
             )}
+            {autoAdvancing && tripleIndex < totalTriples - 1 && (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0 }}
+                className="text-blue-600 font-medium text-sm"
+              >
+                → Next
+              </motion.div>
+            )}
           </AnimatePresence>
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-gray-600 dark:text-gray-300">
             {tripleIndex + 1} / {totalTriples}
           </span>
         </div>
@@ -132,22 +154,30 @@ export const AnnotationPanel: React.FC<Props> = ({
         >
           {/* Compact Triple Info */}
           <div className="mb-4 space-y-2 text-sm">
-            <div className="flex items-start gap-2">
-              <span className="font-semibold text-blue-600 shrink-0">Subject:</span>
-              <span className="text-gray-800">
-                {triple.subject.text} 
-                <span className="text-gray-500 text-xs ml-2">({triple.subject.normalized_id})</span>
-              </span>
+            {/* Compact Entity Info */}
+            <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-2 bg-blue-50 dark:bg-blue-900 rounded border border-blue-200 dark:border-blue-700">
+                  <div className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                    Subject: {triple.subject.text}
+                  </div>
+                  <div className="text-blue-700 dark:text-blue-300">{triple.subject.normalized_id}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {triple.subject.biolink_types?.[0]}
+                  </div>
+                </div>
+                
+                <div className="p-2 bg-red-50 dark:bg-red-900 rounded border border-red-200 dark:border-red-700">
+                  <div className="font-semibold text-red-900 dark:text-red-100 mb-1">
+                    Object: {triple.object.text}
+                  </div>
+                  <div className="text-red-700 dark:text-red-300">{triple.object.normalized_id}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {triple.object.biolink_types?.[0]}
+                  </div>
+                </div>
+              </div>
             </div>
-
-            <div className="flex items-start gap-2">
-              <span className="font-semibold text-red-600 shrink-0">Object:</span>
-              <span className="text-gray-800">
-                {triple.object.text}
-                <span className="text-gray-500 text-xs ml-2">({triple.object.normalized_id})</span>
-              </span>
-            </div>
-
             {triple.llm_suggestion && (
               <div className="flex items-start gap-2 bg-yellow-50 p-2 rounded border border-yellow-200">
                 <span className="font-semibold text-yellow-800 shrink-0">Relationship Text:</span>
@@ -309,8 +339,11 @@ export const AnnotationPanel: React.FC<Props> = ({
       </div>
 
       {/* Keyboard Hints */}
-      <div className="mt-2 text-xs text-gray-500 text-center">
-        Space: Skip | F: Flag | ← →: Navigate
+      <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
+        <div>Space: Skip | F: Flag | ← →: Navigate</div>
+        <div className="mt-1 text-green-600 dark:text-green-400">
+          ✓ Auto-advances after annotation
+        </div>
       </div>
     </div>
   );

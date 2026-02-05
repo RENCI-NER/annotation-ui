@@ -70,6 +70,24 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleReset = async (annotator: string) => {
+    if (!confirm(`Reset all progress for ${annotator}? This will delete their annotations but keep their assignments.`)) return;
+  
+    try {
+      await api.resetAnnotator(annotator);
+      setMessage({
+        type: 'success',
+        text: `✓ Reset ${annotator} - they can start fresh`
+      });
+      await loadData();
+    } catch (err: any) {
+      setMessage({
+        type: 'error',
+        text: `✗ Failed to reset: ${err.message}`
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-6xl mx-auto">
@@ -204,6 +222,12 @@ export const AdminDashboard: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
+                          <button
+                            onClick={() => handleReset(annotator.annotator)}
+                            className="text-orange-600 hover:text-orange-800 text-sm font-medium mr-3"
+                          >
+                            Reset
+                          </button>
                           <button
                             onClick={() => handleDelete(annotator.annotator)}
                             className="text-red-600 hover:text-red-800 text-sm font-medium"
