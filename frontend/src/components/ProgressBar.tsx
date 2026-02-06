@@ -7,7 +7,7 @@ interface Props {
   stats: Stats;
 }
 
-export const ProgressBar: React.FC<Props> = ({ progress, stats }) => {
+export const ProgressBar: React.FC<Props> = ({ progress }) => {
   return (
     <div className="bg-white rounded-lg shadow p-4 mb-4">
       <div className="mb-2">
