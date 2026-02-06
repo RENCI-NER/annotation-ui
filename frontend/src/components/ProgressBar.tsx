@@ -7,49 +7,9 @@ interface Props {
   stats: Stats;
 }
 
-const ACHIEVEMENTS: Record<string, { icon: string; label: string }> = {
-  first_10: { icon: '🎯', label: 'First 10' },
-  century: { icon: '💯', label: 'Century Club' },
-  marathon: { icon: '🏃', label: 'Marathon' },
-  streak_3: { icon: '🔥', label: '3 Day Streak' },
-  streak_7: { icon: '🔥🔥', label: '7 Day Streak' }
-};
-
 export const ProgressBar: React.FC<Props> = ({ progress, stats }) => {
   return (
     <div className="bg-white rounded-lg shadow p-4 mb-4">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🔥</span>
-            <span className="font-bold text-lg">{stats.streak_days}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">⭐</span>
-            <span className="font-bold text-lg">{stats.total_annotations}</span>
-          </div>
-          <div className="text-sm text-gray-600">
-            Today: {stats.annotations_today}
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          {stats.achievements.map(achievement => {
-            const info = ACHIEVEMENTS[achievement];
-            if (!info) return null;
-            return (
-              <div
-                key={achievement}
-                className="flex items-center gap-1 px-2 py-1 bg-purple-100 rounded text-sm"
-                title={info.label}
-              >
-                <span>{info.icon}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       <div className="mb-2">
         <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
           <span>Overall Progress</span>

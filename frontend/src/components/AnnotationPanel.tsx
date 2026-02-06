@@ -144,7 +144,7 @@ export const AnnotationPanel: React.FC<Props> = ({
           ⚠️ {error}
         </div>
       )}
-
+      
       <div className="flex-1 overflow-y-auto">
         <motion.div
           key={triple.id}

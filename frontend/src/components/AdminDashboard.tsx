@@ -32,13 +32,14 @@ export const AdminDashboard: React.FC = () => {
 
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAnnotator.trim() || numArticles <= 0) return;
+    const normalized = newAnnotator.trim().toLowerCase();
+    if (!normalized.trim() || numArticles <= 0) return;
 
     setLoading(true);
     setMessage(null);
 
     try {
-      const result = await api.assignArticles(newAnnotator.trim().toLowerCase(), numArticles);
+      const result = await api.assignArticles(normalized.trim().toLowerCase(), numArticles);
       setMessage({
         type: 'success',
         text: `✓ ${result.message}`
