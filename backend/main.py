@@ -53,6 +53,7 @@ def get_articles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db))
 # REMOVE THE FIRST /articles/{pmid} - KEEP ONLY THIS ONE
 @app.get("/articles/{pmid}", response_model=schemas.ArticleResponse)
 def get_article(pmid: str, annotator: str = "default", db: Session = Depends(get_db)):
+    annotator = normalize_annotator(annotator)
     article = db.query(models.Article).filter(models.Article.pmid == pmid).first()
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
@@ -77,7 +78,7 @@ def get_article(pmid: str, annotator: str = "default", db: Session = Depends(get
 @app.get("/articles/next/unannotated", response_model=schemas.ArticleResponse)
 def get_next_unannotated_article(annotator: str = "default", db: Session = Depends(get_db)):
     """Get next article assigned to this annotator"""
-    
+    annotator = normalize_annotator(annotator)
     assignments = db.query(models.ArticleAssignment).filter(
         models.ArticleAssignment.annotator == annotator
     ).all()
@@ -162,6 +163,7 @@ def get_next_unannotated_article(annotator: str = "default", db: Session = Depen
     
 @app.post("/annotations", response_model=schemas.AnnotationResponse)
 def create_annotation(annotation: schemas.AnnotationCreate, db: Session = Depends(get_db)):
+    annotator = normalize_annotator(annotator)
     existing = db.query(models.Annotation).filter(
         models.Annotation.triple_id == annotation.triple_id,
         models.Annotation.annotator == annotation.annotator
@@ -236,6 +238,8 @@ def get_annotators(db: Session = Depends(get_db)):
 
 @app.post("/admin/assign", response_model=schemas.AssignmentResponse)
 def assign_articles(assignment: schemas.AssignmentCreate, db: Session = Depends(get_db)):
+    assignment.annotator = normalize_annotator(assignment.annotator)
+
     # Get already assigned PMIDs
     assigned_pmids = [a.pmid for a in db.query(models.ArticleAssignment).all()]
     
@@ -253,28 +257,39 @@ def assign_articles(assignment: schemas.AssignmentCreate, db: Session = Depends(
     
     # Add new assignments (doesn't remove existing ones)
     for article in unassigned:
-        new_assignment = models.ArticleAssignment(
-            annotator=assignment.annotator,
-            pmid=article.pmid
-        )
-        db.add(new_assignment)
+        existing = db.query(models.ArticleAssignment).filter(
+            models.ArticleAssignment.annotator == assignment.annotator,
+            models.ArticleAssignment.pmid == article.pmid
+        ).first()
+        
+        if not existing:
+            new_assignment = models.ArticleAssignment(
+                annotator=assignment.annotator,
+                pmid=article.pmid
+            )
+            db.add(new_assignment)
+            added += 1
     
     db.commit()
     
     return schemas.AssignmentResponse(
         annotator=assignment.annotator,
-        assigned_articles=len(unassigned),
-        message=f"Successfully assigned {len(unassigned)} additional articles"
+        assigned_articles=added,
+        message=f"Successfully assigned {added} new articles"
     )
 
 @app.get("/admin/stats")
 def get_admin_stats(db: Session = Depends(get_db)):
     total_articles = db.query(models.Article).count()
-    total_assigned = db.query(models.ArticleAssignment).count()
-    total_completed = db.query(models.ArticleAssignment).filter(
+
+    assigned_pmids = db.query(models.ArticleAssignment.pmid).distinct().all()
+    total_assigned = len(assigned_pmids)
+
+    completed_pmids = db.query(models.ArticleAssignment.pmid).filter(
         models.ArticleAssignment.completed == True
-    ).count()
-    
+    ).distinct().all()
+    total_completed = len(completed_pmids)
+
     return {
         "total_articles": total_articles,
         "total_assigned": total_assigned,
@@ -284,6 +299,7 @@ def get_admin_stats(db: Session = Depends(get_db)):
 
 @app.delete("/admin/annotator/{annotator}")
 def delete_annotator_assignments(annotator: str, db: Session = Depends(get_db)):
+    annotator = normalize_annotator(annotator)
     deleted = db.query(models.ArticleAssignment).filter(
         models.ArticleAssignment.annotator == annotator
     ).delete()
@@ -295,7 +311,7 @@ def delete_annotator_assignments(annotator: str, db: Session = Depends(get_db)):
 @app.post("/admin/annotator/{annotator}/reset")
 def reset_annotator(annotator: str, db: Session = Depends(get_db)):
     """Reset annotator - delete all their annotations but keep assignments"""
-    
+    annotator = normalize_annotator(annotator)
     # Delete all annotations for this annotator
     deleted_annotations = db.query(models.Annotation).filter(
         models.Annotation.annotator == annotator
@@ -334,6 +350,9 @@ def export_annotations(annotator: str = None, status: str = "all", db: Session =
     Export annotations in original corpus format
     status: all (all annotations), completed (fully annotated articles), partial (partially annotated)
     """
+    if annotator:
+        annotator = normalize_annotator(annotator)
+
     articles = db.query(models.Article).all()
   
     export_data = []
@@ -494,6 +513,7 @@ def delete_triple(triple_id: int, db: Session = Depends(get_db)):
 @app.post("/admin/triple/{triple_id}/reassign")
 def reassign_flagged_triple(triple_id: int, new_annotator: str, db: Session = Depends(get_db)):
     """Reassign a flagged triple to another annotator"""
+    new_annotator = normalize_annotator(new_annotator)
     # Remove existing annotation
     db.query(models.Annotation).filter(
         models.Annotation.triple_id == triple_id
@@ -520,8 +540,35 @@ def reassign_flagged_triple(triple_id: int, new_annotator: str, db: Session = De
     db.commit()
     return {"message": f"Triple reassigned to {new_annotator}"}
 
+@app.post("/admin/cleanup-duplicates")
+def cleanup_duplicate_assignments(db: Session = Depends(get_db)):
+    """Remove duplicate assignments (keep first occurrence)"""
+    # Get all assignments
+    all_assignments = db.query(models.ArticleAssignment).all()
+    
+    # Track seen combinations
+    seen = set()
+    to_delete = []
+    
+    for assignment in all_assignments:
+        key = (assignment.annotator, assignment.pmid)
+        if key in seen:
+            to_delete.append(assignment.id)
+        else:
+            seen.add(key)
+    
+    # Delete duplicates
+    if to_delete:
+        db.query(models.ArticleAssignment).filter(
+            models.ArticleAssignment.id.in_(to_delete)
+        ).delete(synchronize_session=False)
+        db.commit()
+    
+    return {"message": f"Deleted {len(to_delete)} duplicate assignments"}
+    
 @app.get("/progress", response_model=schemas.ProgressResponse)
 def get_progress(annotator: str = "default", db: Session = Depends(get_db)):
+    annotator = normalize_annotator(annotator)
     assignments = db.query(models.ArticleAssignment).filter(
         models.ArticleAssignment.annotator == annotator
     ).all()
@@ -573,11 +620,7 @@ def get_progress(annotator: str = "default", db: Session = Depends(get_db)):
     )
 
 @app.get("/annotations/review", response_model=List[schemas.AnnotationResponse])
-def get_review_items(
-    annotator: str = "default",
-    status: str = "flagged",
-    db: Session = Depends(get_db)
-):
+def get_review_items(annotator: str = "default", status: str = "flagged", db: Session = Depends(get_db)):
     query = db.query(models.Annotation).filter(
         models.Annotation.annotator == annotator
     )
@@ -591,6 +634,7 @@ def get_review_items(
 
 @app.get("/articles/skipped", response_model=List[str])
 def get_articles_with_skipped(annotator: str = "default", db: Session = Depends(get_db)):
+    annotator = normalize_annotator(annotator)
     annotations = db.query(models.Annotation).filter(
         models.Annotation.annotator == annotator,
         models.Annotation.skipped == True
@@ -606,6 +650,7 @@ def get_articles_with_skipped(annotator: str = "default", db: Session = Depends(
 
 @app.get("/articles/flagged", response_model=List[str])
 def get_articles_with_flagged(annotator: str = "default", db: Session = Depends(get_db)):
+    annotator = normalize_annotator(annotator)
     annotations = db.query(models.Annotation).filter(
         models.Annotation.annotator == annotator,
         models.Annotation.flagged == True
@@ -621,6 +666,7 @@ def get_articles_with_flagged(annotator: str = "default", db: Session = Depends(
 
 @app.get("/stats", response_model=schemas.StatsResponse)
 def get_stats(annotator: str = "default", db: Session = Depends(get_db)):
+    annotator = normalize_annotator(annotator)
     stats = db.query(models.AnnotatorStats).filter(
         models.AnnotatorStats.annotator == annotator
     ).first()
@@ -701,6 +747,10 @@ def update_annotator_stats(annotator: str, db: Session):
     
     stats.achievements = achievements
     db.commit()
+
+def normalize_annotator(name: str) -> str:
+    """Normalize annotator name to lowercase"""
+    return name.lower().strip()
 
 if __name__ == "__main__":
     import uvicorn
