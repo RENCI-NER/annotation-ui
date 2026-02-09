@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone 
 from fastapi.responses import StreamingResponse
 import json
 import io
@@ -11,13 +11,44 @@ import io
 import models
 import schemas
 from database import engine, get_db
+from contextlib import asynccontextmanager
 
-models.Base.metadata.create_all(bind=engine)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    db = next(get_db())
+    try:
+        # Normalize article assignments
+        assignments = db.query(models.ArticleAssignment).all()
+        for a in assignments:
+            a.annotator = a.annotator.lower().strip()
+        
+        # Normalize annotations
+        annotations = db.query(models.Annotation).all()
+        for a in annotations:
+            a.annotator = a.annotator.lower().strip()
+        
+        # Normalize stats
+        stats = db.query(models.AnnotatorStats).all()
+        for s in stats:
+            s.annotator = s.annotator.lower().strip()
+        
+        db.commit()
+    except Exception as e:
+        print(f"Migration error (likely already done): {e}")
+        db.rollback()
+    finally:
+        db.close()
+    
+    yield
 
 app = FastAPI(
     title="Relation Annotation API",
-    root_path="/api"  
+    root_path="/api" ,
+    lifespan = lifespan 
 )
+models.Base.metadata.create_all(bind=engine)
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -79,16 +110,20 @@ def get_article(pmid: str, annotator: str = "default", db: Session = Depends(get
 def get_next_unannotated_article(annotator: str = "default", db: Session = Depends(get_db)):
     """Get next article assigned to this annotator"""
     annotator = normalize_annotator(annotator)
+    
+    # Get assignments for this annotator
     assignments = db.query(models.ArticleAssignment).filter(
         models.ArticleAssignment.annotator == annotator
     ).all()
     
+    # If NO assignments, return 404
     if not assignments:
         raise HTTPException(
             status_code=404,
             detail=f"No articles assigned to {annotator}. Contact admin to assign articles."
         )
     
+    # Get assigned PMIDs
     assigned_pmids = [a.pmid for a in assignments]
     
     # Find first assigned article with unannotated triples
@@ -100,6 +135,7 @@ def get_next_unannotated_article(annotator: str = "default", db: Session = Depen
         if not article:
             continue
         
+        # Check if has unannotated triples
         has_unannotated = False
         for triple in article.triples:
             annotation = db.query(models.Annotation).filter(
@@ -134,7 +170,7 @@ def get_next_unannotated_article(annotator: str = "default", db: Session = Depen
             
             return article
     
-    # All completed - return first article for review
+    # All completed - return first article for review (READ-ONLY mode)
     if assigned_pmids:
         first_article = db.query(models.Article).filter(
             models.Article.pmid == assigned_pmids[0]
@@ -153,17 +189,25 @@ def get_next_unannotated_article(annotator: str = "default", db: Session = Depen
                     t.notes = ann.notes
                     t.skipped = ann.skipped
                     t.flagged = ann.flagged
+                else:
+                    # Should not happen, but handle it
+                    t.predicate = None
+                    t.confidence = None
+                    t.notes = None
+                    t.skipped = False
+                    t.flagged = False
             
             return first_article
     
+    # Should never reach here, but just in case
     raise HTTPException(
         status_code=404,
         detail=f"No articles available"
     )
-    
+
 @app.post("/annotations", response_model=schemas.AnnotationResponse)
 def create_annotation(annotation: schemas.AnnotationCreate, db: Session = Depends(get_db)):
-    annotator = normalize_annotator(annotator)
+    annotation.annotator = normalize_annotator(annotation.annotator)
     existing = db.query(models.Annotation).filter(
         models.Annotation.triple_id == annotation.triple_id,
         models.Annotation.annotator == annotation.annotator
@@ -215,6 +259,7 @@ def create_annotation(annotation: schemas.AnnotationCreate, db: Session = Depend
 
 @app.get("/admin/annotators", response_model=List[schemas.AnnotatorInfo])
 def get_annotators(db: Session = Depends(get_db)):
+    # Get distinct annotators who have assignments
     annotators = db.query(models.ArticleAssignment.annotator).distinct().all()
     
     result = []
@@ -222,6 +267,9 @@ def get_annotators(db: Session = Depends(get_db)):
         assignments = db.query(models.ArticleAssignment).filter(
             models.ArticleAssignment.annotator == annotator
         ).all()
+        
+        if not assignments:
+            continue
         
         assigned_count = len(assignments)
         completed_count = len([a for a in assignments if a.completed])
@@ -254,7 +302,7 @@ def assign_articles(assignment: schemas.AssignmentCreate, db: Session = Depends(
             assigned_articles=0,
             message="No unassigned articles available"
         )
-    
+    added = 0
     # Add new assignments (doesn't remove existing ones)
     for article in unassigned:
         existing = db.query(models.ArticleAssignment).filter(
@@ -300,13 +348,18 @@ def get_admin_stats(db: Session = Depends(get_db)):
 @app.delete("/admin/annotator/{annotator}")
 def delete_annotator_assignments(annotator: str, db: Session = Depends(get_db)):
     annotator = normalize_annotator(annotator)
-    deleted = db.query(models.ArticleAssignment).filter(
+    
+    deleted_assignments = db.query(models.ArticleAssignment).filter(
         models.ArticleAssignment.annotator == annotator
+    ).delete()
+    
+    db.query(models.AnnotatorStats).filter(
+        models.AnnotatorStats.annotator == annotator
     ).delete()
     
     db.commit()
     
-    return {"message": f"Deleted {deleted} assignments for {annotator}"}
+    return {"message": f"Deleted {deleted_assignments} assignments and stats for {annotator}"}
 
 @app.post("/admin/annotator/{annotator}/reset")
 def reset_annotator(annotator: str, db: Session = Depends(get_db)):
@@ -701,7 +754,7 @@ def update_annotator_stats(annotator: str, db: Session):
             annotator=annotator,
             total_annotations=1,
             streak_days=1,
-            last_annotation_date=datetime.utcnow(),
+            last_annotation_date=datetime.utcnow(timezone.utc),
             achievements=[]
         )
         db.add(stats)
@@ -717,7 +770,7 @@ def update_annotator_stats(annotator: str, db: Session):
     
     stats.total_annotations += 1
     
-    today = datetime.utcnow().date()
+    today = datetime.now(timezone.utc).date()
     
     if stats.last_annotation_date:
         last_date = stats.last_annotation_date.date() if isinstance(stats.last_annotation_date, datetime) else stats.last_annotation_date
@@ -730,7 +783,7 @@ def update_annotator_stats(annotator: str, db: Session):
     else:
         stats.streak_days = 1
     
-    stats.last_annotation_date = datetime.utcnow()
+    stats.last_annotation_date = datetime.now(timezone.utc)
     
     achievements = list(stats.achievements)
     
