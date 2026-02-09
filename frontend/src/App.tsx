@@ -27,6 +27,7 @@ function App() {
   const [reviewPmids, setReviewPmids] = useState<string[]>([]);
   const [reviewIndex, setReviewIndex] = useState(0);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [showCompletionBanner, setShowCompletionBanner] = useState(false);
 
 
   // ============ ALL FUNCTIONS NEXT ============
@@ -38,8 +39,19 @@ function App() {
       const data = await api.getNextArticle(annotator);
       setArticle(data);
       setCurrentTripleIndex(0);
+      setShowCompletionBanner(false); // Hide banner when loading new article
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load article');
+      const errorMsg = err.response?.data?.detail || 'Failed to load article';
+      
+      // If no assignments, show error screen
+      if (errorMsg.includes("No articles assigned")) {
+        setError(errorMsg);
+        setArticle(null);
+      } else {
+        // All completed - still load the article but show banner
+        setError(null);
+        setShowCompletionBanner(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -307,32 +319,59 @@ function App() {
           <div className="text-lg text-gray-600 dark:text-gray-300">Loading...</div>
         </div>
       </div>
-    );
+    ); 
   }
 
   if (error) {
     const isCompleted = error.includes("completed");
+    const noAssignments = error.includes("No articles assigned");
     
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center max-w-md">
           <div className="text-4xl mb-4">🎉</div>
           <div className="text-2xl font-bold mb-2 dark:text-white">
-            {isCompleted ? "All Assigned Articles Completed!" : "All Done!"}
+            {noAssignments ? "No Assignments" : isCompleted ? "All Done!" : "Complete!"}
           </div>
-          <div className="text-gray-600 dark:text-gray-300 mb-4">{error}</div>
+          <div className="text-gray-600 dark:text-gray-300 mb-6">{error}</div>
+          
+          {noAssignments && (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Contact your administrator to get articles assigned.
+              </p>
+              <button
+                onClick={() => {
+                  localStorage.removeItem('annotator');
+                  window.location.reload();
+                }}
+                className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg"
+              >
+                Logout & Switch User
+              </button>
+            </div>
+          )}
+          
           {isCompleted && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <button
                 onClick={() => {
                   setError(null);
                   loadArticle();
                 }}
-                className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
+                className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg block w-full"
               >
                 Review My Annotations
               </button>
-              <p className="text-sm text-gray-500">You can review and edit your completed work</p>
+              <button
+                onClick={() => {
+                  localStorage.removeItem('annotator');
+                  window.location.reload();
+                }}
+                className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg block w-full"
+              >
+                Logout & Switch User
+              </button>
             </div>
           )}
         </div>
@@ -435,6 +474,33 @@ function App() {
       <div className="max-w-7xl mx-auto px-4 py-4">
         {progress && stats && <ProgressBar progress={progress} stats={stats} />}
       </div>
+      
+      {showCompletionBanner && article && (
+        <div className="max-w-7xl mx-auto px-4 mb-4">
+          <div className="bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700 rounded-lg p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="text-2xl">🎉</div>
+              <div>
+                <div className="font-semibold text-green-800 dark:text-green-100">
+                  All Assignments Completed!
+                </div>
+                <div className="text-sm text-green-600 dark:text-green-300">
+                  You can review your work or contact admin for more articles
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem('annotator');
+                window.location.reload();
+              }}
+              className="px-4 py-2 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-sm"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-4 mb-4">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">

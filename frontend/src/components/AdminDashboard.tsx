@@ -136,7 +136,7 @@ export const AdminDashboard: React.FC = () => {
                 onClick={() => api.exportAnnotations(undefined, 'completed')}
                 className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg"
               >
-                ✅ Export Completed Only
+                Export Completed Only
               </button>
               <button
                 onClick={() => api.exportAnnotations(undefined, 'partial')}
