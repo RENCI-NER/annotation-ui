@@ -151,13 +151,13 @@ exit
 
 **Upgrade deployment:**
 ```bash
-helm upgrade annotation-ui ./helm/annotation-ui -n 
+helm upgrade annotation-ui ./helm/annotation-ui -n <namespace>
 ```
 
 **Restart specific service:**
 ```bash
-kubectl rollout restart deployment/annotation-backend -n 
-kubectl rollout restart deployment/annotation-frontend -n 
+kubectl rollout restart deployment/annotation-backend -n <namespace>
+kubectl rollout restart deployment/annotation-frontend -n <namespace>
 ```
 
 ### Using Docker Compose (Local)
