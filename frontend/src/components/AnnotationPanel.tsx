@@ -72,6 +72,7 @@ export const AnnotationPanel: React.FC<Props> = ({
   }, [triple]);
 
   const handlePredicateSelect = async (predicate: string) => {
+    // if (!predicate) return;
     setSelectedPredicate(predicate);
     onAnnotate(predicate, confidence, notes);
     setShowSaved(true);
@@ -122,13 +123,13 @@ export const AnnotationPanel: React.FC<Props> = ({
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-gray-500">Loading predicates...</div>
+        <div className="text-gray-500 dark:text-gray-400">Loading predicates...</div>
       </div>
     );
   }
 
 
-  
+
   return (
     <div className="h-full flex flex-col p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
       <div className="flex items-center justify-between mb-6">
@@ -140,7 +141,7 @@ export const AnnotationPanel: React.FC<Props> = ({
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 exit={{ scale: 0 }}
-                className="text-green-600 font-medium text-sm"
+                className="text-green-600 dark:text-green-400 font-medium text-sm"
               >
                 ✓ Saved
               </motion.div>
@@ -150,7 +151,7 @@ export const AnnotationPanel: React.FC<Props> = ({
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0 }}
-                className="text-blue-600 font-medium text-sm"
+                className="text-blue-600 dark:text-blue-400 font-medium text-sm"
               >
                 → Next
               </motion.div>
@@ -163,11 +164,12 @@ export const AnnotationPanel: React.FC<Props> = ({
       </div>
 
       {error && (
-        <div className="mb-3 p-2 bg-orange-50 border border-orange-200 rounded text-xs text-orange-700">
+        <div className="mb-3 p-2 bg-orange-50 dark:bg-orange-900 border border-orange-200 dark:border-orange-700 rounded text-xs text-orange-700 dark:text-orange-200">
           ⚠️ {error}
         </div>
       )}
       
+      {/* Scrollable content area - everything BEFORE action buttons */}
       <div className="flex-1 overflow-y-auto">
         <motion.div
           key={triple.id}
@@ -177,30 +179,6 @@ export const AnnotationPanel: React.FC<Props> = ({
         >
           {/* Compact Triple Info */}
           <div className="mb-4 space-y-2 text-sm">
-            {/* Compact Entity Info */}
-            {/* <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-2 bg-blue-50 dark:bg-blue-900 rounded border border-blue-200 dark:border-blue-700">
-                  <div className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                    Subject: {triple.subject.text}
-                  </div>
-                  <div className="text-blue-700 dark:text-blue-300">{triple.subject.normalized_id}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {triple.subject.biolink_types?.[0]}
-                  </div>
-                </div>
-                
-                <div className="p-2 bg-red-50 dark:bg-red-900 rounded border border-red-200 dark:border-red-700">
-                  <div className="font-semibold text-red-900 dark:text-red-100 mb-1">
-                    Object: {triple.object.text}
-                  </div>
-                  <div className="text-red-700 dark:text-red-300">{triple.object.normalized_id}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {triple.object.biolink_types?.[0]}
-                  </div>
-                </div>
-              </div>
-            </div> */}
             <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
               <div className="grid grid-cols-2 gap-3 text-xs">
                 {/* Subject Entity */}
@@ -216,17 +194,21 @@ export const AnnotationPanel: React.FC<Props> = ({
                   </div>
                   
                   {/* Clickable Links */}
-                  <div className="flex flex-wrap gap-1"> {getEntityLinks(triple.subject.normalized_id, triple.subject.biolink_types?.[0] || '').map((link, idx) => (
-                      <a  key={idx}
+                  <div className="flex flex-wrap gap-1">
+                    {triple.subject.normalized_id && getEntityLinks(
+                      triple.subject.normalized_id,  
+                      triple.subject.biolink_types?.[0] || ''
+                    ).map((link, idx) => (
+                      <a
+                        key={idx}
                         href={link.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-800 hover:bg-blue-200 dark:hover:bg-blue-700 text-blue-800 dark:text-blue-200 rounded"
+                        className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-800 hover:bg-blue-200 dark:hover:bg-blue-700 text-blue-800 dark:text-blue-200 rounded transition-colors"
                       >
                         {link.label} ↗
                       </a>
-                    )
-                    )}
+                    ))}
                   </div>
                 </div>
                 
@@ -244,13 +226,16 @@ export const AnnotationPanel: React.FC<Props> = ({
                   
                   {/* Clickable Links */}
                   <div className="flex flex-wrap gap-1">
-                    {getEntityLinks(triple.object.normalized_id, triple.object.biolink_types?.[0] || '').map((link, idx) => (
+                    {triple.object.normalized_id && getEntityLinks(
+                      triple.object.normalized_id,  
+                      triple.object.biolink_types?.[0] || ''
+                    ).map((link, idx) => (
                       <a
                         key={idx}
                         href={link.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs px-2 py-1 bg-red-100 dark:bg-red-800 hover:bg-red-200 dark:hover:bg-red-700 text-red-800 dark:text-red-200 rounded"
+                        className="text-xs px-2 py-1 bg-red-100 dark:bg-red-800 hover:bg-red-200 dark:hover:bg-red-700 text-red-800 dark:text-red-200 rounded transition-colors"
                       >
                         {link.label} ↗
                       </a>
@@ -261,19 +246,19 @@ export const AnnotationPanel: React.FC<Props> = ({
             </div>
             
             {triple.llm_suggestion && (
-              <div className="flex items-start gap-2 bg-yellow-50 p-2 rounded border border-yellow-200">
-                <span className="font-semibold text-yellow-800 shrink-0">Relationship Text:</span>
-                <span className="text-yellow-900">{triple.llm_suggestion}</span>
+              <div className="flex items-start gap-2 bg-yellow-50 dark:bg-yellow-900 p-2 rounded border border-yellow-200 dark:border-yellow-700">
+                <span className="font-semibold text-yellow-800 dark:text-yellow-100 shrink-0">Relationship Text:</span>
+                <span className="text-yellow-900 dark:text-yellow-200">{triple.llm_suggestion}</span>
               </div>
             )}
           </div>
 
           {/* Predicate Selection */}
           <div className="mb-4">
-            <div className="text-sm font-semibold text-gray-700 mb-2">
+            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Select Biolink Predicate:
               {triple.llm_suggestion && !searchTerm && (
-                <span className="ml-2 text-xs text-yellow-600 font-normal">
+                <span className="ml-2 text-xs text-yellow-600 dark:text-yellow-400 font-normal">
                   replacement for relationship text
                 </span>
               )}
@@ -284,30 +269,30 @@ export const AnnotationPanel: React.FC<Props> = ({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search predicates..."
-              className="w-full p-2 mb-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full p-2 mb-2 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
 
             {selectedPredicateInfo && (
-              <div className="mb-2 p-2 bg-green-50 border border-green-200 rounded-lg">
-                <div className="text-xs text-green-600 mb-1">Selected:</div>
-                <div className="font-medium text-sm text-green-800">
+              <div className="mb-2 p-2 bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700 rounded-lg">
+                <div className="text-xs text-green-600 dark:text-green-300 mb-1">Selected:</div>
+                <div className="font-medium text-sm text-green-800 dark:text-green-200">
                   {selectedPredicateInfo.name}
                 </div>
                 {selectedPredicateInfo.description && (
-                  <div className="text-xs text-green-700 italic mt-1">
+                  <div className="text-xs text-green-700 dark:text-green-300 italic mt-1">
                     {selectedPredicateInfo.description}
                   </div>
                 )}
               </div>
             )}
 
-            <div className="max-h-80 overflow-y-auto border border-gray-200 rounded-lg">
+            <div className="max-h-80 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-lg">
               {smartPredicates.length === 0 ? (
-                <div className="p-4 text-center text-sm text-gray-500">
+                <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
                   No predicates available
                 </div>
               ) : (
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
                   {smartPredicates.map((predInfo, index) => {
                     const isTopMatch = index < 3 && !searchTerm && triple.llm_suggestion;
                     const isSelected = selectedPredicate === predInfo.id;
@@ -320,21 +305,19 @@ export const AnnotationPanel: React.FC<Props> = ({
                           isSelected
                             ? 'bg-blue-500 text-white'
                             : isTopMatch
-                            ? 'bg-yellow-50 hover:bg-yellow-100'
-                            : 'hover:bg-gray-50'
+                            ? 'bg-yellow-50 dark:bg-yellow-900 hover:bg-yellow-100 dark:hover:bg-yellow-800'
+                            : 'hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-200'
                         }`}
                       >
                         <div className="flex items-center gap-2">
-                          {isTopMatch && (
-                            <span className="text-xs"></span>
-                          )}
+                          {isTopMatch && <span className="text-xs">⭐</span>}
                           <div className="flex-1">
                             <div className="text-sm font-medium">{predInfo.name}</div>
                             {predInfo.description && (
                               <div className={`text-xs mt-1 ${
                                 isSelected
                                   ? 'text-blue-100'
-                                  : 'text-gray-500'
+                                  : 'text-gray-500 dark:text-gray-400'
                               }`}>
                                 {predInfo.description}
                               </div>
@@ -348,85 +331,84 @@ export const AnnotationPanel: React.FC<Props> = ({
               )}
             </div>
           </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-2 pt-4 border-t border-gray-200">
-            <button
-              onClick={onPrevious}
-              disabled={tripleIndex === 0}
-              className="flex-1 py-2 text-sm bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400 rounded-lg transition-colors"
-            >
-              ◀ Prev
-            </button>
-            <button
-              onClick={onSkip}
-              className="flex-1 py-2 text-sm bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded-lg transition-colors"
-            >
-              Skip
-            </button>
-            <button
-              onClick={onFlag}
-              className="flex-1 py-2 text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-lg transition-colors"
-            >
-              🚩 Flag
-            </button>
-            <button
-              onClick={onNext}
-              disabled={tripleIndex === totalTriples - 1}
-              className="flex-1 py-2 text-sm bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded-lg transition-colors"
-            >
-              Next ▶
-            </button>
-          </div>
-
-          {/* Keyboard Hints */}
-          <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
-            <div>Space: Skip | F: Flag | ← →: Navigate</div>
-            <div className="mt-1 text-green-600 dark:text-green-400">
-              ✓ Auto-advances after annotation
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div className="mb-4">
-            <label className="text-sm font-semibold text-gray-700 mb-2 block">
-              Notes (optional):
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              onBlur={() => {
-                if (selectedPredicate) {
-                  onAnnotate(selectedPredicate, confidence, notes);
-                }
-              }}
-              className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              rows={2}
-              placeholder="Optional notes..."
-            />
-          </div>
-          
-          {/* Confidence */}
-          <div className="mb-4">
-            <div className="text-sm font-semibold text-gray-700 mb-2">Confidence:</div>
-            <div className="flex gap-2">
-              {['low', 'medium', 'high'].map((conf) => (
-                <button
-                  key={conf}
-                  onClick={() => handleConfidenceChange(conf)}
-                  className={`flex-1 py-2 px-3 text-sm rounded-lg border-2 transition-all ${
-                    confidence === conf
-                      ? 'border-purple-500 bg-purple-50 text-purple-700 font-medium'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  {conf.charAt(0).toUpperCase() + conf.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-
         </motion.div>
+      </div>
+
+      {/* Action Buttons - OUTSIDE scrollable area */}
+      <div className="flex gap-2 mb-4 border-t border-gray-200 dark:border-gray-600 pt-4">
+        <button
+          onClick={onPrevious}
+          disabled={tripleIndex === 0}
+          className="flex-1 py-2 text-sm bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 disabled:bg-gray-50 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:text-gray-200 rounded-lg transition-colors"
+        >
+          ◀ Prev
+        </button>
+        <button
+          onClick={onSkip}
+          className="flex-1 py-2 text-sm bg-yellow-100 dark:bg-yellow-800 hover:bg-yellow-200 dark:hover:bg-yellow-700 text-yellow-800 dark:text-yellow-100 rounded-lg transition-colors"
+        >
+          Skip
+        </button>
+        <button
+          onClick={onFlag}
+          className="flex-1 py-2 text-sm bg-orange-100 dark:bg-orange-800 hover:bg-orange-200 dark:hover:bg-orange-700 text-orange-800 dark:text-orange-100 rounded-lg transition-colors"
+        >
+          🚩 Flag
+        </button>
+        <button
+          onClick={onNext}
+          disabled={tripleIndex === totalTriples - 1}
+          className="flex-1 py-2 text-sm bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white rounded-lg transition-colors"
+        >
+          Next ▶
+        </button>
+      </div>
+
+      {/* Keyboard Hints */}
+      <div className="mb-4 text-xs text-gray-500 dark:text-gray-400 text-center border-b border-gray-200 dark:border-gray-600 pb-4">
+        <div>Space: Skip | F: Flag | ← →: Navigate</div>
+        <div className="mt-1 text-green-600 dark:text-green-400">
+          ✓ Auto-advances after annotation
+        </div>
+      </div>
+
+      {/* Notes */}
+      <div className="mb-4">
+        <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
+          Notes (optional):
+        </label>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          onBlur={() => {
+            if (selectedPredicate !== null && selectedPredicate !== '') {
+              onAnnotate(selectedPredicate, confidence, notes);
+            }
+          }}
+          className="w-full p-2 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          rows={2}
+          placeholder="Optional notes..."
+        />
+      </div>
+      
+      {/* Confidence */}
+      <div className="mb-2">
+        <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Confidence:</div>
+        <div className="flex gap-2">
+          {['low', 'medium', 'high'].map((conf) => (
+            <button
+              key={conf}
+              onClick={() => handleConfidenceChange(conf)}
+              className={`flex-1 py-2 px-3 text-sm rounded-lg border-2 transition-all ${
+                confidence === conf
+                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900 text-purple-700 dark:text-purple-200 font-medium'
+                  : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 dark:text-gray-300'
+              }`}
+            >
+              {conf.charAt(0).toUpperCase() + conf.slice(1)}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

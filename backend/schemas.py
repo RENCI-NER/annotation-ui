@@ -26,6 +26,8 @@ class TripleResponse(BaseModel):
     notes: Optional[str] = None
     skipped: bool = False
     flagged: bool = False
+    distance_words: Optional[int] = None  
+    same_sentence: Optional[bool] = None
     
     class Config:
         from_attributes = True
