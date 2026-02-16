@@ -144,6 +144,18 @@ export const api = {
     const response = await axios.delete(`${API_BASE}/admin/unassign-article/${pmid}/${annotator}`);
     return response.data;
   },
+  uploadCorpus: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await axios.post(`${API_BASE}/admin/upload-corpus`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    
+    return response.data;
+  },
 };
 
 export interface AnnotatorInfo {

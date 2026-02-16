@@ -126,12 +126,16 @@ Frontend runs on `http://localhost:5173`
 
 ### Using Kubernetes + Helm
 ```bash
-helm install annotation-ui ./helm/annotation-ui -n  --create-namespace
+helm install annotation-ui ./annotation-ui -n  --create-namespace
 ```
 
 **Load corpus data into Kubernetes:**
+```bash
+Option 1: Upload Corpus Tab from Admin UI
+```
 
 ```bash
+Option 2:
 # Get backend pod name so you can identify the backend pod name
 kubectl get pods -n <namesapce>
 
@@ -158,6 +162,14 @@ helm upgrade annotation-ui ./helm/annotation-ui -n <namespace>
 ```bash
 kubectl rollout restart deployment/annotation-backend -n <namespace>
 kubectl rollout restart deployment/annotation-frontend -n <namespace>
+```
+
+**Delete the deployment:**
+```bash
+# uninstall the deployment helm chart:**
+ helm uninstall annotation-ui ./annotation-ui -n <namespace>
+# delete the persistent volume -pvc:**
+kubectl delete pvc annotation-data-pvc -n <namespace> 
 ```
 
 ### Using Docker Compose (Local)

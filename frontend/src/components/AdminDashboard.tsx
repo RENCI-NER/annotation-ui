@@ -42,20 +42,24 @@ export const AdminDashboard: React.FC = () => {
     setUploading(true);
     setUploadMessage(null);
 
-    const formData = new FormData();
-    formData.append('file', uploadFile);
+    // const formData = new FormData();
+    // formData.append('file', uploadFile);
 
     try {
       // Fix: Use import.meta.env for Vite
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-      const response = await fetch(`${apiBase}/admin/upload-corpus`, {
-        method: 'POST',
-        body: formData,
-      });
+      // const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+      const result = await api.uploadCorpus(uploadFile);
+      // console.log('Uploading to:', `${apiBase}/admin/upload-corpus`);  // logging
 
-      const result = await response.json();
+      // const response = await fetch(`${apiBase}/admin/upload-corpus`, {
+      //   method: 'POST',
+      //   body: formData,
+      // });
 
-      if (response.ok) {
+      // console.log('Response status:', response.status);
+      // const result = await response.json();
+
+      if (result) {
         setUploadMessage(`✅ ${result.message}: ${result.articles_added} articles, ${result.triples_added} triples added`);
         setUploadFile(null);
         await loadData();
@@ -63,7 +67,9 @@ export const AdminDashboard: React.FC = () => {
         setUploadMessage(`❌ ${result.detail}`);
       }
     } catch (err: any) {
-      setUploadMessage(`❌ Upload failed: ${err.message}`);
+      console.error('Upload error:', err);
+      const errorMsg = err.response?.data?.detail || err.message || 'Unknown error';
+      setUploadMessage(`❌ Upload failed: ${errorMsg}`);
     } finally {
       setUploading(false);
     }
