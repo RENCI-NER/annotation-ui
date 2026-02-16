@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { AbstractView } from './components/AbstractView';
 import { AnnotationPanel } from './components/AnnotationPanel';
 import { ProgressBar } from './components/ProgressBar';
@@ -11,7 +12,10 @@ import { Article, Progress, Stats } from './types';
 
 type Mode = 'normal' | 'review-skipped' | 'review-flagged';
 
+
 function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
   // ============ ALL HOOKS FIRST ============
   const { theme, toggleTheme } = useTheme();
   const [annotator, setAnnotator] = useState<string | null>(() => {
@@ -292,9 +296,11 @@ function App() {
     }
   }, [annotator]);
 
-  // ============ NOW CONDITIONALS AND RETURNS ============
-  const isAdminPage = window.location.pathname === '/admin' || 
-                      new URLSearchParams(window.location.search).get('admin') === 'true';
+  // // ============ NOW CONDITIONALS AND RETURNS ============
+  // const isAdminPage = window.location.pathname === '/admin' || 
+  //                     new URLSearchParams(window.location.search).get('admin') === 'true';
+
+  const isAdminPage = location.pathname == '/admin'
 
   if (isAdminPage) {
     return <AdminDashboard />;
@@ -395,147 +401,159 @@ function App() {
 
   // ============ MAIN RENDER ============
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {showCompletionModal && (
-        <CompletionModal
-          onContinue={handleContinueToNextArticle}
-          onReview={handleReviewArticle}
-        />
-      )}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
-              🔬 RELATE Annotation Interface
-            </h1>
-            <div className="flex items-center gap-4">
-              {mode !== 'normal' && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={exitReviewMode}
-                    className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg dark:text-gray-200"
-                  >
-                    ← Exit Review Mode
-                  </button>
-                  <div className="text-sm text-gray-600 dark:text-gray-300">
-                    {mode === 'review-skipped' ? '⏭️ Reviewing Skipped' : '🚩 Reviewing Flagged'}
-                    {' '}({reviewIndex + 1}/{reviewPmids.length})
+    <Routes>
+      <Route path="/admin" element={<AdminDashboard />} />
+      <Route path="/" element={
+        !annotator ? (
+          <Login onLogin={(name) => {
+            localStorage.setItem('annotator', name);
+            setAnnotator(name);
+          }} />
+        ) : (
+          <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+            {showCompletionModal && (
+              <CompletionModal
+                onContinue={handleContinueToNextArticle}
+                onReview={handleReviewArticle}
+              />
+            )}
+            <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+              <div className="max-w-7xl mx-auto px-4 py-4">
+                <div className="flex items-center justify-between">
+                  <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
+                    🔬 RELATE Annotation Interface
+                  </h1>
+                  <div className="flex items-center gap-4">
+                    {mode !== 'normal' && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={exitReviewMode}
+                          className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg dark:text-gray-200"
+                        >
+                          ← Exit Review Mode
+                        </button>
+                        <div className="text-sm text-gray-600 dark:text-gray-300">
+                          {mode === 'review-skipped' ? '⏭️ Reviewing Skipped' : '🚩 Reviewing Flagged'}
+                          {' '}({reviewIndex + 1}/{reviewPmids.length})
+                        </div>
+                      </div>
+                    )}
+                    {mode === 'normal' && (
+                      <>
+                        <button
+                          onClick={() => enterReviewMode('review-skipped')}
+                          className="px-4 py-2 text-sm bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded-lg"
+                        >
+                          ⏭️ Review Skipped
+                        </button>
+                        <button
+                          onClick={() => enterReviewMode('review-flagged')}
+                          className="px-4 py-2 text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-lg"
+                        >
+                          🚩 Review Flagged
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg dark:text-gray-200"
+                    >
+                      Refresh
+                    </button>
+                    
+                    <button
+                      onClick={toggleTheme}
+                      className="p-2 text-2xl hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                      title="Toggle theme"
+                    >
+                      {theme === 'light' ? '🌙' : '☀️'}
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600 dark:text-gray-300">👤 {annotator}</span>
+                      <button
+                        onClick={() => {
+                          localStorage.removeItem('annotator');
+                          window.location.reload();
+                        }}
+                        className="px-3 py-1 text-xs bg-red-50 text-red-600 hover:bg-red-100 rounded"
+                      >
+                        Logout
+                      </button>
+                    </div>
                   </div>
                 </div>
-              )}
-              {mode === 'normal' && (
-                <>
-                  <button
-                    onClick={() => enterReviewMode('review-skipped')}
-                    className="px-4 py-2 text-sm bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded-lg"
-                  >
-                    ⏭️ Review Skipped
-                  </button>
-                  <button
-                    onClick={() => enterReviewMode('review-flagged')}
-                    className="px-4 py-2 text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-lg"
-                  >
-                    🚩 Review Flagged
-                  </button>
-                </>
-              )}
-              <button
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg dark:text-gray-200"
-              >
-                Refresh
-              </button>
-              
-              <button
-                onClick={toggleTheme}
-                className="p-2 text-2xl hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                title="Toggle theme"
-              >
-                {theme === 'light' ? '🌙' : '☀️'}
-              </button>
-
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600 dark:text-gray-300">👤 {annotator}</span>
-                <button
-                  onClick={() => {
-                    localStorage.removeItem('annotator');
-                    window.location.reload();
-                  }}
-                  className="px-3 py-1 text-xs bg-red-50 text-red-600 hover:bg-red-100 rounded"
-                >
-                  Logout
-                </button>
               </div>
-            </div>
-          </div>
-        </div>
-      </header>
+            </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-4">
-        {progress && stats && <ProgressBar progress={progress} stats={stats} />}
-      </div>
-      
-      {showCompletionBanner && article && (
-        <div className="max-w-7xl mx-auto px-4 mb-4">
-          <div className="bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700 rounded-lg p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="text-2xl">🎉</div>
-              <div>
-                <div className="font-semibold text-green-800 dark:text-green-100">
-                  All Assignments Completed!
+            <div className="max-w-7xl mx-auto px-4 py-4">
+              {progress && stats && <ProgressBar progress={progress} stats={stats} />}
+            </div>
+            
+            {showCompletionBanner && article && (
+              <div className="max-w-7xl mx-auto px-4 mb-4">
+                <div className="bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700 rounded-lg p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="text-2xl">🎉</div>
+                    <div>
+                      <div className="font-semibold text-green-800 dark:text-green-100">
+                        All Assignments Completed!
+                      </div>
+                      <div className="text-sm text-green-600 dark:text-green-300">
+                        You can review your work or contact admin for more articles
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem('annotator');
+                      window.location.reload();
+                    }}
+                    className="px-4 py-2 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-sm"
+                  >
+                    Logout
+                  </button>
                 </div>
-                <div className="text-sm text-green-600 dark:text-green-300">
-                  You can review your work or contact admin for more articles
+              </div>
+            )}
+
+            <div className="max-w-7xl mx-auto px-4 mb-4">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">PMID: {article.pmid}</div>
+                    <div className="font-semibold text-gray-800 dark:text-white">{article.title}</div>
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-300">
+                    Year: {article.year} | {article.target_entity_count} target entities
+                  </div>
                 </div>
               </div>
             </div>
-            <button
-              onClick={() => {
-                localStorage.removeItem('annotator');
-                window.location.reload();
-              }}
-              className="px-4 py-2 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-sm"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      )}
 
-      <div className="max-w-7xl mx-auto px-4 mb-4">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">PMID: {article.pmid}</div>
-              <div className="font-semibold text-gray-800 dark:text-white">{article.title}</div>
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-300">
-              Year: {article.year} | {article.target_entity_count} target entities
+            <div className="max-w-7xl mx-auto px-4 pb-8">
+              <div className="grid grid-cols-2 gap-2" style={{ height: 'calc(100vh - 280px)' }}>
+                <AbstractView
+                  abstract={article.abstract}
+                  highlightedEntities={[currentTriple.subject, currentTriple.object]}
+                  currentTriple={currentTriple}
+                />
+                <AnnotationPanel
+                  triple={currentTriple}
+                  tripleIndex={currentTripleIndex}
+                  totalTriples={article.triples.length}
+                  onAnnotate={handleAnnotate}
+                  onSkip={handleSkip}
+                  onFlag={handleFlag}
+                  onPrevious={handlePrevious}
+                  onNext={handleNext}
+                />
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 pb-8">
-        <div className="grid grid-cols-2 gap-2" style={{ height: 'calc(100vh - 280px)' }}>
-          <AbstractView
-            abstract={article.abstract}
-            highlightedEntities={[currentTriple.subject, currentTriple.object]}
-            currentTriple={currentTriple}
-          />
-          <AnnotationPanel
-            triple={currentTriple}
-            tripleIndex={currentTripleIndex}
-            totalTriples={article.triples.length}
-            onAnnotate={handleAnnotate}
-            onSkip={handleSkip}
-            onFlag={handleFlag}
-            onPrevious={handlePrevious}
-            onNext={handleNext}
-          />
-        </div>
-      </div>
-    </div>
+        )
+      } />
+    </Routes>
   );
 }
 

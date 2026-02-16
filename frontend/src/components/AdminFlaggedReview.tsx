@@ -109,7 +109,7 @@ export const AdminFlaggedReview: React.FC = () => {
               )}
 
               {item.notes && (
-                <div className="text-sm mb-3 p-2 bg-gray-50 rounded">
+                <div className="text-sm mb-3 p-2 bg-gray-50 dark:bg-gray-700 rounded">
                   <span className="font-semibold">Notes:</span> {item.notes}
                 </div>
               )}

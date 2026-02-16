@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 from fastapi.responses import StreamingResponse
 import json
 import io
-
 
 import models
 import schemas
@@ -256,6 +255,240 @@ def create_annotation(annotation: schemas.AnnotationCreate, db: Session = Depend
                     db.commit()
     
     return existing if existing else db_annotation
+
+@app.post("/admin/upload-corpus")
+async def upload_corpus(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Upload and process a corpus JSON file"""
+    if not file.filename.endswith('.json'):
+        raise HTTPException(status_code=400, detail="File must be JSON")
+    
+    try:
+        contents = await file.read()
+        corpus_data = json.loads(contents)
+        
+        if not isinstance(corpus_data, list):
+            raise HTTPException(status_code=400, detail="Corpus must be a JSON array")
+        
+        articles_added = 0
+        triples_added = 0
+        
+        for article_data in corpus_data:
+            # Check if article already exists
+            existing = db.query(models.Article).filter(
+                models.Article.pmid == article_data['pmid']
+            ).first()
+            
+            if existing:
+                continue
+            
+            # Create article
+            article = models.Article(
+                pmid=article_data['pmid'],
+                title=article_data['title'],
+                abstract=article_data['abstract'],
+                year=article_data.get('year'),
+                target_entity_count=len(article_data.get('triples', []))
+            )
+            db.add(article)
+            db.flush()
+            articles_added += 1
+            
+            # Create entities and triples
+            entity_cache = {}
+            
+            for triple_data in article_data.get('triples', []):
+                # Create subject entity
+                subject_key = triple_data['subject_id']
+                if subject_key not in entity_cache:
+                    subject = models.Entity(
+                        text=triple_data['subject'],
+                        normalized_id=triple_data['subject_id'],
+                        biolink_types=triple_data.get('subject_types', []),
+                        start_pos=triple_data.get('subject_start', 0),
+                        end_pos=triple_data.get('subject_end', 0)
+                    )
+                    db.add(subject)
+                    db.flush()
+                    entity_cache[subject_key] = subject
+                else:
+                    subject = entity_cache[subject_key]
+                
+                # Create object entity
+                object_key = triple_data['object_id']
+                if object_key not in entity_cache:
+                    obj = models.Entity(
+                        text=triple_data['object'],
+                        normalized_id=triple_data['object_id'],
+                        biolink_types=triple_data.get('object_types', []),
+                        start_pos=triple_data.get('object_start', 0),
+                        end_pos=triple_data.get('object_end', 0)
+                    )
+                    db.add(obj)
+                    db.flush()
+                    entity_cache[object_key] = obj
+                else:
+                    obj = entity_cache[object_key]
+                
+                # Create triple
+                triple = models.Triple(
+                    pmid=article.pmid,
+                    subject_id=subject.id,
+                    object_id=obj.id,
+                    llm_suggestion=triple_data.get('relationship')
+                )
+                db.add(triple)
+                triples_added += 1
+        
+        db.commit()
+        
+        return {
+            "message": "Successfully uploaded corpus",
+            "articles_added": articles_added,
+            "triples_added": triples_added,
+            "articles_skipped": len(corpus_data) - articles_added
+        }
+        
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+# backend/main.py
+@app.post("/admin/annotator/{name}")
+def create_annotator(name: str, db: Session = Depends(get_db)):
+    """Register a new annotator"""
+    name = normalize_annotator(name)
+    
+    # Check if exists
+    existing = db.query(models.AnnotatorStats).filter(
+        models.AnnotatorStats.annotator == name
+    ).first()
+    
+    if existing:
+        raise HTTPException(status_code=400, detail="Annotator already exists")
+    
+    # Create stats entry
+    stats = models.AnnotatorStats(
+        annotator=name,
+        total_annotations=0,
+        streak_days=0,
+        achievements=[]
+    )
+    db.add(stats)
+    db.commit()
+    
+    return {"message": f"Added annotator {name}"}
+
+@app.get("/admin/all-annotators")
+def get_all_annotators(db: Session = Depends(get_db)):
+    """Get all registered annotators"""
+    stats = db.query(models.AnnotatorStats.annotator).distinct().all()
+    return [s[0] for s in stats]
+
+@app.get("/admin/assignment-matrix")
+def get_assignment_matrix(db: Session = Depends(get_db)):
+    """Get a matrix of article assignments across all annotators"""
+    # Get ALL articles
+    articles = db.query(models.Article).order_by(models.Article.pmid).all()
+    
+    # Get all unique annotators who have any assignments
+    annotators = db.query(models.ArticleAssignment.annotator).distinct().all()
+    annotator_list = sorted([a[0] for a in annotators])
+    
+    result = {
+        "articles": [],
+        "annotators": annotator_list
+    }
+    
+    for article in articles:
+        article_data = {
+            "pmid": article.pmid,
+            "title": article.title,
+            "triple_count": len(article.triples),
+            "annotators": {}
+        }
+        
+        # For each annotator, check assignment status
+        for annotator in annotator_list:
+            assignment = db.query(models.ArticleAssignment).filter(
+                models.ArticleAssignment.pmid == article.pmid,
+                models.ArticleAssignment.annotator == annotator
+            ).first()
+            
+            if not assignment:
+                article_data["annotators"][annotator] = {
+                    "assigned": False,
+                    "completed": False,
+                    "progress": 0
+                }
+            else:
+                # Calculate progress
+                total_triples = len(article.triples)
+                annotated = db.query(models.Annotation).join(
+                    models.Triple
+                ).filter(
+                    models.Triple.pmid == article.pmid,
+                    models.Annotation.annotator == annotator,
+                    models.Annotation.predicate.isnot(None)
+                ).count()
+                
+                progress = int((annotated / total_triples * 100)) if total_triples > 0 else 0
+                
+                article_data["annotators"][annotator] = {
+                    "assigned": True,
+                    "completed": assignment.completed,
+                    "progress": progress
+                }
+        
+        result["articles"].append(article_data)
+    
+    return result
+
+@app.post("/admin/assign-article/{pmid}/{annotator}")
+def assign_specific_article(pmid: str, annotator: str, db: Session = Depends(get_db)):
+    """Assign a specific article to a specific annotator"""
+    annotator = normalize_annotator(annotator)
+    
+    # Check if article exists
+    article = db.query(models.Article).filter(models.Article.pmid == pmid).first()
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    
+    # Check if already assigned
+    existing = db.query(models.ArticleAssignment).filter(
+        models.ArticleAssignment.pmid == pmid,
+        models.ArticleAssignment.annotator == annotator
+    ).first()
+    
+    if existing:
+        return {"message": "Already assigned"}
+    
+    # Create assignment
+    assignment = models.ArticleAssignment(
+        pmid=pmid,
+        annotator=annotator
+    )
+    db.add(assignment)
+    db.commit()
+    
+    return {"message": f"Assigned PMID {pmid} to {annotator}"}
+
+@app.delete("/admin/unassign-article/{pmid}/{annotator}")
+def unassign_article(pmid: str, annotator: str, db: Session = Depends(get_db)):
+    """Remove an article assignment"""
+    annotator = normalize_annotator(annotator)
+    
+    deleted = db.query(models.ArticleAssignment).filter(
+        models.ArticleAssignment.pmid == pmid,
+        models.ArticleAssignment.annotator == annotator
+    ).delete()
+    
+    if deleted == 0:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    
+    db.commit()
+    return {"message": "Removed assignment"}
 
 @app.get("/admin/annotators", response_model=List[schemas.AnnotatorInfo])
 def get_annotators(db: Session = Depends(get_db)):
@@ -754,7 +987,7 @@ def update_annotator_stats(annotator: str, db: Session):
             annotator=annotator,
             total_annotations=1,
             streak_days=1,
-            last_annotation_date=datetime.utcnow(timezone.utc),
+            last_annotation_date=datetime.now(timezone.utc),
             achievements=[]
         )
         db.add(stats)
@@ -804,6 +1037,68 @@ def update_annotator_stats(annotator: str, db: Session):
 def normalize_annotator(name: str) -> str:
     """Normalize annotator name to lowercase"""
     return name.lower().strip()
+
+@app.get("/admin/multi-annotated-articles")
+def get_multi_annotated_articles(db: Session = Depends(get_db)):
+    """Get PMIDs of articles assigned to 2+ annotators"""
+    from sqlalchemy import func
+    
+    multi_assigned = db.query(
+        models.ArticleAssignment.pmid,
+        func.count(models.ArticleAssignment.annotator).label('count')
+    ).group_by(
+        models.ArticleAssignment.pmid
+    ).having(
+        func.count(models.ArticleAssignment.annotator) >= 2
+    ).all()
+    
+    return [pmid for pmid, count in multi_assigned]
+
+@app.get("/admin/comparison/{pmid}")
+def get_annotation_comparison(pmid: str, db: Session = Depends(get_db)):
+    """Get side-by-side comparison of annotations for an article"""
+    article = db.query(models.Article).filter(models.Article.pmid == pmid).first()
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    
+    assignments = db.query(models.ArticleAssignment).filter(
+        models.ArticleAssignment.pmid == pmid
+    ).all()
+    
+    result = {
+        "pmid": pmid,
+        "title": article.title,
+        "abstract": article.abstract,
+        "annotators": []
+    }
+    
+    for assignment in assignments:
+        annotator = assignment.annotator
+        annotations = []
+        
+        for triple in article.triples:
+            ann = db.query(models.Annotation).filter(
+                models.Annotation.triple_id == triple.id,
+                models.Annotation.annotator == annotator
+            ).first()
+            
+            if ann:
+                annotations.append({
+                    "triple_id": triple.id,
+                    "subject": triple.subject.text,
+                    "object": triple.object.text,
+                    "predicate": ann.predicate,
+                    "confidence": ann.confidence,
+                    "notes": ann.notes or "",
+                    "timestamp": ann.created_at.isoformat()
+                })
+        
+        result["annotators"].append({
+            "annotator": annotator,
+            "annotations": annotations
+        })
+    
+    return result
 
 if __name__ == "__main__":
     import uvicorn

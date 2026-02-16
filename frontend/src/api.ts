@@ -119,6 +119,31 @@ export const api = {
     });
     return response.data;
   },
+
+  getMultiAnnotatedArticles: async () => {
+    const response = await axios.get(`${API_BASE}/admin/multi-annotated-articles`);
+    return response.data;
+  },
+
+  getAnnotationComparison: async (pmid: string) => {
+    const response = await axios.get(`${API_BASE}/admin/comparison/${pmid}`);
+    return response.data;
+  },
+
+  getAssignmentMatrix: async () => {
+    const response = await axios.get(`${API_BASE}/admin/assignment-matrix`);
+    return response.data;
+  },
+  
+  assignSpecificArticle: async (pmid: string, annotator: string) => {
+    const response = await axios.post(`${API_BASE}/admin/assign-article/${pmid}/${annotator}`);
+    return response.data;
+  },
+  
+  unassignArticle: async (pmid: string, annotator: string) => {
+    const response = await axios.delete(`${API_BASE}/admin/unassign-article/${pmid}/${annotator}`);
+    return response.data;
+  },
 };
 
 export interface AnnotatorInfo {
