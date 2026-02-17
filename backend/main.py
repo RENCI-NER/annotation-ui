@@ -16,9 +16,6 @@ import json
 import io
 import re
 
-
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -94,7 +91,6 @@ def get_articles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db))
                 triple.flagged = annotation.flagged
     return articles
 
-# REMOVE THE FIRST /articles/{pmid} - KEEP ONLY THIS ONE
 @app.get("/articles/{pmid}", response_model=schemas.ArticleResponse)
 def get_article(pmid: str, annotator: str = "default", db: Session = Depends(get_db)):
     annotator = normalize_annotator(annotator)
