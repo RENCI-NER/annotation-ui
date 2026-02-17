@@ -1,16 +1,23 @@
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from typing import List
-from datetime import datetime, timedelta, timezone 
 from fastapi.responses import StreamingResponse
-import json
-import io
-
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 import models
 import schemas
+
+from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 from database import engine, get_db
-from contextlib import asynccontextmanager
+
+from typing import List, Optional
+from datetime import datetime, timedelta, timezone 
+from collections import Counter
+import json
+import io
+import re
+
+
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -32,7 +39,9 @@ async def lifespan(app: FastAPI):
         for s in stats:
             s.annotator = s.annotator.lower().strip()
         
+        db.execute(text("ALTER TABLE articles ADD COLUMN keywords JSON"))
         db.commit()
+        print("Added keywords column")
     except Exception as e:
         print(f"Migration error (likely already done): {e}")
         db.rollback()
@@ -47,7 +56,12 @@ app = FastAPI(
     lifespan = lifespan 
 )
 models.Base.metadata.create_all(bind=engine)
-
+stopwords = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 
+                'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'been',
+                'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
+                'could', 'should', 'may', 'might', 'must', 'can', 'that', 'this',
+                'these', 'those', 'it', 'its', 'which', 'what', 'who', 'when', 'where'}
+        
 
 app.add_middleware(
     CORSMiddleware,
@@ -271,6 +285,7 @@ async def upload_corpus(file: UploadFile = File(...), db: Session = Depends(get_
         
         articles_added = 0
         triples_added = 0
+        all_keywords = set()
         
         for article_data in corpus_data:
             # Check if article already exists
@@ -280,6 +295,10 @@ async def upload_corpus(file: UploadFile = File(...), db: Session = Depends(get_
             
             if existing:
                 continue
+
+            keywords = article_data.get('keywords', [])
+            if keywords:
+                all_keywords.update(keywords)
             
             # Create article
             article = models.Article(
@@ -287,7 +306,8 @@ async def upload_corpus(file: UploadFile = File(...), db: Session = Depends(get_
                 title=article_data['title'],
                 abstract=article_data['abstract'],
                 year=article_data.get('year'),
-                target_entity_count=len(article_data.get('triples', []))
+                target_entity_count=len(article_data.get('triples', [])),
+                keywords=keywords
             )
             db.add(article)
             db.flush()
@@ -345,7 +365,8 @@ async def upload_corpus(file: UploadFile = File(...), db: Session = Depends(get_
             "message": "Successfully uploaded corpus",
             "articles_added": articles_added,
             "triples_added": triples_added,
-            "articles_skipped": len(corpus_data) - articles_added
+            "articles_skipped": len(corpus_data) - articles_added,
+            "unique_keywords": len(all_keywords)
         }
         
     except json.JSONDecodeError:
@@ -354,7 +375,92 @@ async def upload_corpus(file: UploadFile = File(...), db: Session = Depends(get_
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-# backend/main.py
+@app.get("/admin/keywords")
+def get_all_keywords(db: Session = Depends(get_db)):
+    """Get all unique keywords across all articles"""
+    articles = db.query(models.Article).all()
+    
+    keyword_counter = Counter()
+    for article in articles:
+        if article.keywords:
+            keyword_counter.update(article.keywords)
+    
+    # Return keywords sorted by frequency
+    return {
+        "keywords": [
+            {"keyword": k, "count": c} 
+            for k, c in keyword_counter.most_common(100)
+        ],
+        "total_unique": len(keyword_counter)
+    }
+
+@app.post("/admin/extract-keywords/{pmid}")
+def extract_keywords_from_article(pmid: str, db: Session = Depends(get_db)):
+    """Auto-extract keywords from article title and abstract using simple NLP"""
+    article = db.query(models.Article).filter(models.Article.pmid == pmid).first()
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    
+    # Simple keyword extraction (you can make this more sophisticated)
+    text = f"{article.title} {article.abstract}".lower()
+  
+    # Extract words (simple tokenization)
+    words = re.findall(r'\b[a-z]{4,}\b', text)
+    word_freq = Counter(w for w in words if w not in stopwords)
+    
+    # Get top 10 keywords
+    keywords = [word for word, _ in word_freq.most_common(10)]
+    
+    # Update article
+    article.keywords = keywords
+    db.commit()
+    
+    return {"pmid": pmid, "keywords": keywords}
+
+@app.post("/admin/extract-all-keywords")
+def extract_all_keywords(db: Session = Depends(get_db)):
+    """Extract keywords for all articles that don't have them"""
+    articles = db.query(models.Article).all()
+    
+    updated = 0
+    for article in articles:
+        if article.keywords and len(article.keywords) > 0:
+            continue
+        
+        keywords = []
+        
+        # Option 1: Try to extract from entities in triples
+        entity_texts = set()
+        for triple in article.triples:
+            # Get entity text without normalization artifacts
+            subj_text = triple.subject.text.lower()
+            obj_text = triple.object.text.lower()
+            
+            # Add meaningful entity names
+            if len(subj_text.split()) <= 3:  # Not too long
+                entity_texts.add(subj_text)
+            if len(obj_text.split()) <= 3:
+                entity_texts.add(obj_text)
+        
+        if entity_texts:
+            keywords = list(entity_texts)[:10]
+        else:
+            # Option 2: Fall back to text extraction
+            text = f"{article.title} {article.abstract}".lower()
+            words = re.findall(r'\b[a-z]{4,}\b', text)
+            word_freq = Counter(w for w in words if w not in stopwords)
+            keywords = [word for word, _ in word_freq.most_common(10)]
+        
+        article.keywords = keywords
+        updated += 1
+    
+    db.commit()
+    return {
+        "updated": updated,
+        "total_articles": len(articles),
+        "message": f"Extracted keywords for {updated} articles"
+    }
+
 @app.post("/admin/annotator/{name}")
 def create_annotator(name: str, db: Session = Depends(get_db)):
     """Register a new annotator"""
@@ -366,13 +472,14 @@ def create_annotator(name: str, db: Session = Depends(get_db)):
     ).first()
     
     if existing:
-        raise HTTPException(status_code=400, detail="Annotator already exists")
+        return {"message": f"Annotator {name} already exists"}
     
     # Create stats entry
     stats = models.AnnotatorStats(
         annotator=name,
         total_annotations=0,
         streak_days=0,
+        last_annotation_date=None,
         achievements=[]
     )
     db.add(stats)
@@ -383,14 +490,35 @@ def create_annotator(name: str, db: Session = Depends(get_db)):
 @app.get("/admin/all-annotators")
 def get_all_annotators(db: Session = Depends(get_db)):
     """Get all registered annotators"""
-    stats = db.query(models.AnnotatorStats.annotator).distinct().all()
-    return [s[0] for s in stats]
+    from_stats = db.query(models.AnnotatorStats.annotator).distinct().all()
+    from_assignments = db.query(models.ArticleAssignment.annotator).distinct().all()
+    
+    all_names = set(
+        [a[0] for a in from_stats] + 
+        [a[0] for a in from_assignments]
+    )
+    
+    return sorted(list(all_names))
 
 @app.get("/admin/assignment-matrix")
-def get_assignment_matrix(db: Session = Depends(get_db)):
+def get_assignment_matrix(keywords: Optional[str] = None, db: Session = Depends(get_db)):
     """Get a matrix of article assignments across all annotators"""
-    # Get ALL articles
-    articles = db.query(models.Article).order_by(models.Article.pmid).all()
+    # Get articles with optional keyword filter
+    all_articles = db.query(models.Article).order_by(models.Article.pmid).all()
+    
+    
+    if keywords:
+        keyword_list = [k.strip().lower() for k in keywords.split(',')]
+        articles = [
+            a for a in all_articles
+            if a.keywords and any(
+                kw in [k.lower() for k in a.keywords]
+                for kw in keyword_list
+            )
+        ]
+    else:
+        articles = all_articles
+    
     
     # Get all unique annotators who have any assignments
     annotators = db.query(models.ArticleAssignment.annotator).distinct().all()

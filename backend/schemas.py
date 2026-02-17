@@ -51,6 +51,7 @@ class ArticleResponse(BaseModel):
     year: int
     target_entity_count: int
     entities: List[EntityResponse]
+    keywords: List[str] = []
     triples: List[TripleResponse]
     
     class Config:

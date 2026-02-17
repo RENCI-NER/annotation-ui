@@ -12,6 +12,7 @@ class Article(Base):
     year = Column(Integer)
     target_entity_count = Column(Integer)
     target_entity_percentage = Column(Float)
+    keywords = Column(JSON, default = list)
     
     entities = relationship("Entity", back_populates="article", cascade="all, delete-orphan")
     triples = relationship("Triple", back_populates="article", cascade="all, delete-orphan")
