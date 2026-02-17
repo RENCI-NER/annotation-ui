@@ -10,13 +10,41 @@ export const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [newAnnotator, setNewAnnotator] = useState('');
   const [numArticles, setNumArticles] = useState(100);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showFlaggedReview, setShowFlaggedReview] = useState(false);
   const [showComparison, setShowComparison] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadStats();
+    loadAnnotators();
+  }, []);
+
+  const loadAnnotators = async () => {
+    try {
+      const data = await api.getAnnotators();
+      setAnnotators(data);
+    } catch (err) {
+      console.error('Failed to load annotators:', err);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const data = await api.getAdminStats();
+      setStats(data);
+    } catch (err) {
+      console.error('Failed to load stats:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const hasArticles = stats && stats.total_articles > 0;
+
 
   useEffect(() => {
     loadData();
@@ -131,7 +159,30 @@ export const AdminDashboard: React.FC = () => {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
       <div className="max-w-[1600px] mx-auto">
         <h1 className="text-3xl font-bold mb-8 dark:text-white">Admin Dashboard</h1>
-
+        
+        {/* Show warning if no articles */}
+        {!loading && !hasArticles && (
+          <div className="mb-6 p-6 bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-300 dark:border-amber-700 rounded-xl">
+            <div className="flex items-start gap-4">
+              <div className="text-4xl">📋</div>
+              <div>
+                <h3 className="text-lg font-bold text-amber-900 dark:text-amber-200 mb-2">
+                  No Corpus Uploaded Yet
+                </h3>
+                <p className="text-amber-800 dark:text-amber-300 mb-3">
+                  Before you can manage annotators or assign articles, you need to upload a corpus.
+                </p>
+                <button
+                  onClick={() => setActiveTab('upload')}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  → Go to Upload Corpus
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+  
         {/* Tab Navigation */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-8">
           <div className="flex border-b border-gray-200 dark:border-gray-700">
@@ -146,21 +197,27 @@ export const AdminDashboard: React.FC = () => {
               📊 Overview
             </button>
             <button
-              onClick={() => setActiveTab('assignments')}
+              onClick={() => hasArticles && setActiveTab('assignments')}
+              disabled={!hasArticles}
               className={`px-6 py-4 font-medium ${
                 activeTab === 'assignments'
                   ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  : hasArticles 
+                    ? 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    : 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
               }`}
             >
               📋 Manual Assignment
             </button>
             <button
-              onClick={() => setActiveTab('random')}
+              onClick={() => hasArticles && setActiveTab('random')}
+              disabled={!hasArticles}
               className={`px-6 py-4 font-medium ${
                 activeTab === 'random'
                   ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  : hasArticles
+                    ? 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    : 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
               }`}
             >
               🎲 Random Assignment
@@ -202,7 +259,7 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
             )}
-
+  
             {/* Export, Flagged Review, Comparison */}
             <div className="grid grid-cols-3 gap-4 mb-8">
               {/* Export Section */}
@@ -211,111 +268,91 @@ export const AdminDashboard: React.FC = () => {
                 <div className="flex flex-col gap-2">
                   <button
                     onClick={() => api.exportAnnotations(undefined, 'all')}
-                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                    disabled={!hasArticles}
+                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
                   >
                     📥 Export All
                   </button>
                   <button
                     onClick={() => api.exportAnnotations(undefined, 'completed')}
-                    className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+                    disabled={!hasArticles || (stats?.total_completed ?? 0) === 0}
+                    className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
                   >
                     ✅ Export Completed Only
                   </button>
                   <button
                     onClick={() => api.exportAnnotations(undefined, 'partial')}
-                    className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition-colors"
+                    disabled={!hasArticles}
+                    className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
                   >
                     ⏳ Export Partial
                   </button>
+                  {!hasArticles && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
+                      Upload corpus first
+                    </p>
+                  )}
                 </div>
               </div>
-
+  
               {/* Flagged Review Section */}
               <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
                 <h3 className="text-lg font-semibold mb-4 dark:text-white">Review Flagged Triples</h3>
                 <button
                   onClick={() => setShowFlaggedReview(!showFlaggedReview)}
-                  className="w-full px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
+                  disabled={!hasArticles}
+                  className="w-full px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
                 >
                   {showFlaggedReview ? '✕ Close Review' : '🚩 Review All Flagged Triples'}
                 </button>
+                {!hasArticles && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
+                    Upload corpus first
+                  </p>
+                )}
               </div>
-
+  
               {/* Comparison Section */}
               <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
                 <h3 className="text-lg font-semibold mb-4 dark:text-white">Compare Annotators</h3>
                 <button
                   onClick={() => setShowComparison(!showComparison)}
-                  className="w-full px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors"
+                  disabled={!hasArticles}
+                  className="w-full px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
                 >
                   {showComparison ? '✕ Close Comparison' : '👥 Compare Annotators'}
                 </button>
+                {!hasArticles && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
+                    Upload corpus first
+                  </p>
+                )}
               </div>
             </div>
-
+  
             {/* Flagged Review Panel */}
-            {showFlaggedReview && (
+            {showFlaggedReview && hasArticles && (
               <div className="mb-8">
                 <AdminFlaggedReview />
               </div>
             )}
-
+  
             {/* Comparison Panel */}
-            {showComparison && (
+            {showComparison && hasArticles && (
               <div className="mb-8">
                 <AdminComparisonView />
               </div>
             )}
-
-            {/* Assign Articles Form
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow mb-8">
-              <h2 className="text-xl font-semibold mb-4 dark:text-white">Random Assignment</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Assign a specified number of random unassigned articles to an annotator
-              </p>
-              
-              {message && (
-                <div className={`mb-4 p-3 rounded ${
-                  message.type === 'success' 
-                    ? 'bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-200' 
-                    : 'bg-red-50 text-red-700 dark:bg-red-900 dark:text-red-200'
-                }`}>
-                  {message.text}
-                </div>
-              )}
-
-              <form onSubmit={handleAssign} className="flex gap-4">
-                <input
-                  type="text"
-                  value={newAnnotator}
-                  onChange={(e) => setNewAnnotator(e.target.value)}
-                  placeholder="Annotator name (e.g., alice)"
-                  className="flex-1 p-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={loading}
-                />
-                <input
-                  type="number"
-                  value={numArticles}
-                  onChange={(e) => setNumArticles(parseInt(e.target.value) || 0)}
-                  placeholder="Number of articles"
-                  min="1"
-                  className="w-40 p-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={loading}
-                />
-                <button
-                  type="submit"
-                  disabled={loading || !newAnnotator.trim() || numArticles <= 0}
-                  className="px-6 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded-lg font-medium transition-colors"
-                >
-                  {loading ? 'Assigning...' : 'Assign'}
-                </button>
-              </form>
-            </div> */}
-
+  
             {/* Annotators List */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
               <div className="p-6 border-b border-gray-200 dark:border-gray-700">
                 <h2 className="text-xl font-semibold dark:text-white">Annotators</h2>
+                {!hasArticles && (
+                  <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
+                    💡 You can add annotators now, but they won't have articles to annotate until you upload a corpus.
+                  </p>
+                )}
               </div>
               
               {annotators.length === 0 ? (
@@ -352,7 +389,7 @@ export const AdminDashboard: React.FC = () => {
                         const progress = annotator.assigned_count > 0
                           ? (annotator.completed_count / annotator.assigned_count) * 100
                           : 0;
-
+  
                         return (
                           <tr key={annotator.annotator} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                             <td className="px-6 py-4 whitespace-nowrap font-medium dark:text-gray-200">
@@ -402,72 +439,114 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
         )}
-
+  
         {/* ===== MANUAL ASSIGNMENT TAB ===== */}
         {activeTab === 'assignments' && (
-          <AdminAssignmentTable />
+          !hasArticles ? (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-12 text-center">
+              <div className="text-6xl mb-4">📋</div>
+              <h3 className="text-xl font-bold text-gray-700 dark:text-gray-300 mb-2">
+                No Articles to Assign
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-6">
+                Upload a corpus in the "Upload Corpus" tab to get started.
+              </p>
+              <button
+                onClick={() => setActiveTab('upload')}
+                className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
+              >
+                → Go to Upload Corpus
+              </button>
+            </div>
+          ) : (
+            <AdminAssignmentTable 
+              onAssignmentChange={() => {
+                loadStats();
+                loadAnnotators();
+              }} 
+            />
+          )
         )}
+  
         {/* ===== RANDOM ASSIGNMENT TAB ===== */}
         {activeTab === 'random' && (
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-            <h2 className="text-2xl font-semibold mb-4 dark:text-white">Random Assignment</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Automatically assign a specified number of random unassigned articles to an annotator.
-              For manual selection, use the <button onClick={() => setActiveTab('assignments')} className="text-blue-600 hover:underline">Manual Assignment</button> tab.
-            </p>
-            
-            {message && (
-              <div className={`mb-4 p-3 rounded ${
-                message.type === 'success' 
-                  ? 'bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-200' 
-                  : 'bg-red-50 text-red-700 dark:bg-red-900 dark:text-red-200'
-              }`}>
-                {message.text}
-              </div>
-            )}
-
-            <form onSubmit={handleAssign} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold mb-2 dark:text-gray-300">
-                    Annotator Name
-                  </label>
-                  <input
-                    type="text"
-                    value={newAnnotator}
-                    onChange={(e) => setNewAnnotator(e.target.value)}
-                    placeholder="e.g., alice"
-                    className="w-full p-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={loading}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold mb-2 dark:text-gray-300">
-                    Number of Articles
-                  </label>
-                  <input
-                    type="number"
-                    value={numArticles}
-                    onChange={(e) => setNumArticles(parseInt(e.target.value) || 0)}
-                    placeholder="100"
-                    min="1"
-                    className="w-full p-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={loading}
-                  />
-                </div>
-              </div>
-              
+          !hasArticles ? (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-12 text-center">
+              <div className="text-6xl mb-4">🎲</div>
+              <h3 className="text-xl font-bold text-gray-700 dark:text-gray-300 mb-2">
+                No Articles Available
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-6">
+                Upload a corpus first to enable random assignment.
+              </p>
               <button
-                type="submit"
-                disabled={loading || !newAnnotator.trim() || numArticles <= 0}
-                className="w-full px-6 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded-lg font-medium transition-colors"
+                onClick={() => setActiveTab('upload')}
+                className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
               >
-                {loading ? 'Assigning...' : '🎲 Assign Random Articles'}
+                → Go to Upload Corpus
               </button>
-            </form>
-          </div>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+              <h2 className="text-2xl font-semibold mb-4 dark:text-white">Random Assignment</h2>
+              <p className="text-gray-600 dark:text-gray-400 mb-6">
+                Automatically assign a specified number of random unassigned articles to an annotator.
+                For manual selection, use the <button onClick={() => setActiveTab('assignments')} className="text-blue-600 hover:underline">Manual Assignment</button> tab.
+              </p>
+              
+              {message && (
+                <div className={`mb-4 p-3 rounded ${
+                  message.type === 'success' 
+                    ? 'bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-200' 
+                    : 'bg-red-50 text-red-700 dark:bg-red-900 dark:text-red-200'
+                }`}>
+                  {message.text}
+                </div>
+              )}
+  
+              <form onSubmit={handleAssign} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 dark:text-gray-300">
+                      Annotator Name
+                    </label>
+                    <input
+                      type="text"
+                      value={newAnnotator}
+                      onChange={(e) => setNewAnnotator(e.target.value)}
+                      placeholder="e.g., alice"
+                      className="w-full p-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 dark:text-gray-300">
+                      Number of Articles
+                    </label>
+                    <input
+                      type="number"
+                      value={numArticles}
+                      onChange={(e) => setNumArticles(parseInt(e.target.value) || 0)}
+                      placeholder="100"
+                      min="1"
+                      className="w-full p-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+                
+                <button
+                  type="submit"
+                  disabled={loading || !newAnnotator.trim() || numArticles <= 0}
+                  className="w-full px-6 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+                >
+                  {loading ? 'Assigning...' : '🎲 Assign Random Articles'}
+                </button>
+              </form>
+            </div>
+          )
         )}
-
+  
         {/* ===== UPLOAD TAB ===== */}
         {activeTab === 'upload' && (
           <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
@@ -485,7 +564,7 @@ export const AdminDashboard: React.FC = () => {
                 {uploadMessage}
               </div>
             )}
-
+  
             <form onSubmit={handleCorpusUpload} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -506,7 +585,7 @@ export const AdminDashboard: React.FC = () => {
               <button
                 type="submit"
                 disabled={uploading || !uploadFile}
-                className="px-6 py-3 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white rounded-lg font-medium transition-colors"
+                className="px-6 py-3 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
               >
                 {uploading ? 'Uploading...' : '📤 Upload Corpus'}
               </button>

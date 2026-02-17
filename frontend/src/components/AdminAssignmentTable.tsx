@@ -14,7 +14,11 @@ interface ArticleAssignment {
   };
 }
 
-export const AdminAssignmentTable: React.FC = () => {
+interface AdminAssignmentTableProps {
+  onAssignmentChange?: () => void;
+}
+
+export const AdminAssignmentTable: React.FC<AdminAssignmentTableProps> = ({ onAssignmentChange }) => {
   const [articles, setArticles] = useState<ArticleAssignment[]>([]);
   const [allAnnotators, setAllAnnotators] = useState<string[]>([]);
   const [allKeywords, setAllKeywords] = useState<{keyword: string; count: number}[]>([]);
@@ -137,11 +141,12 @@ export const AdminAssignmentTable: React.FC = () => {
     }
   };
 
- const handleAssign = async (pmid: string, annotator: string) => {
+  const handleAssign = async (pmid: string, annotator: string) => {
     try {
       await api.assignSpecificArticle(pmid, annotator);
       await loadAssignments();
       setMessage(`✅ Assigned PMID ${pmid} to ${annotator}`);
+      onAssignmentChange?.();  // Notify parent
     } catch (err: any) {
       setMessage(`❌ ${err.message}`);
     }
@@ -154,6 +159,7 @@ export const AdminAssignmentTable: React.FC = () => {
       await api.unassignArticle(pmid, annotator);
       await loadAssignments();
       setMessage(`✅ Removed assignment`);
+      onAssignmentChange?.();  //Notify parent
     } catch (err: any) {
       setMessage(`❌ ${err.message}`);
     }
