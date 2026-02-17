@@ -46,12 +46,26 @@ export const api = {
     const response = await axios.get(`${API_BASE}/articles/flagged`, {
       params: { annotator }
     });
-    return response.data;
+    return response.data;  
   },
 
   getNextArticle: async (annotator: string = 'default'): Promise<Article> => {
     const response = await axios.get(`${API_BASE}/articles/next/unannotated`, {
       params: { annotator }  
+    });
+    return response.data;
+  },
+
+  getSkippedTriples: async (annotator: string) => {
+    const response = await axios.get(`${API_BASE}/admin/skipped`, {  
+      params: { annotator }
+    });
+    return response.data;
+  },
+  
+  getFlaggedTriples: async (annotator: string) => {
+    const response = await axios.get(`${API_BASE}/admin/flagged`, {
+      params: { annotator }
     });
     return response.data;
   },

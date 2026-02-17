@@ -267,7 +267,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
             )}
 
-            {/* Assign Articles Form */}
+            {/* Assign Articles Form
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow mb-8">
               <h2 className="text-xl font-semibold mb-4 dark:text-white">Random Assignment</h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
@@ -310,7 +310,7 @@ export const AdminDashboard: React.FC = () => {
                   {loading ? 'Assigning...' : 'Assign'}
                 </button>
               </form>
-            </div>
+            </div> */}
 
             {/* Annotators List */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow">

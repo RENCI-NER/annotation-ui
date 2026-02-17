@@ -129,7 +129,7 @@ export const AdminAssignmentTable: React.FC = () => {
     
     try {
       await api.deleteAnnotatorAssignments(annotator);
-      await loadAnnotators();  // ✅ Reload from DB instead of filtering local state
+      await loadAnnotators();  // Reload from DB instead of filtering local state
       await loadAssignments();
       setMessage(`✅ Removed ${annotator}`);
     } catch (err: any) {

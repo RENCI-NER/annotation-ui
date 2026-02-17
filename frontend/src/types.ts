@@ -40,7 +40,7 @@ export interface Progress {
   annotated_triples: number;
   skipped_triples: number;
   flagged_triples: number;
-  unannotated_triples: number; 
+  unannotated_triples: number;
   completion_percentage: number;
 }
 

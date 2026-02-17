@@ -91,6 +91,38 @@ def get_articles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db))
                 triple.flagged = annotation.flagged
     return articles
 
+@app.get("/articles/skipped", response_model=List[str])
+def get_articles_with_skipped(annotator: str = "default", db: Session = Depends(get_db)):
+    annotator = normalize_annotator(annotator)
+    annotations = db.query(models.Annotation).filter(
+        models.Annotation.annotator == annotator,
+        models.Annotation.skipped == True
+    ).all()
+    
+    pmids = set()
+    for ann in annotations:
+        triple = db.query(models.Triple).filter(models.Triple.id == ann.triple_id).first()
+        if triple:
+            pmids.add(triple.pmid)
+    
+    return list(pmids)
+
+@app.get("/articles/flagged", response_model=List[str])
+def get_articles_with_flagged(annotator: str = "default", db: Session = Depends(get_db)):
+    annotator = normalize_annotator(annotator)
+    annotations = db.query(models.Annotation).filter(
+        models.Annotation.annotator == annotator,
+        models.Annotation.flagged == True
+    ).all()
+    
+    pmids = set()
+    for ann in annotations:
+        triple = db.query(models.Triple).filter(models.Triple.id == ann.triple_id).first()
+        if triple:
+            pmids.add(triple.pmid)
+    
+    return list(pmids)
+
 @app.get("/articles/{pmid}", response_model=schemas.ArticleResponse)
 def get_article(pmid: str, annotator: str = "default", db: Session = Depends(get_db)):
     annotator = normalize_annotator(annotator)
@@ -114,105 +146,6 @@ def get_article(pmid: str, annotator: str = "default", db: Session = Depends(get
             triple.annotated = False
     
     return article
-
-@app.get("/articles/next/unannotated", response_model=schemas.ArticleResponse)
-def get_next_unannotated_article(annotator: str = "default", db: Session = Depends(get_db)):
-    """Get next article assigned to this annotator"""
-    annotator = normalize_annotator(annotator)
-    
-    # Get assignments for this annotator
-    assignments = db.query(models.ArticleAssignment).filter(
-        models.ArticleAssignment.annotator == annotator
-    ).all()
-    
-    # If NO assignments, return 404
-    if not assignments:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No articles assigned to {annotator}. Contact admin to assign articles."
-        )
-    
-    # Get assigned PMIDs
-    assigned_pmids = [a.pmid for a in assignments]
-    
-    # Find first assigned article with unannotated triples
-    for pmid in assigned_pmids:
-        article = db.query(models.Article).filter(
-            models.Article.pmid == pmid
-        ).first()
-        
-        if not article:
-            continue
-        
-        # Check if has unannotated triples
-        has_unannotated = False
-        for triple in article.triples:
-            annotation = db.query(models.Annotation).filter(
-                models.Annotation.triple_id == triple.id,
-                models.Annotation.annotator == annotator
-            ).first()
-            
-            if not annotation:
-                has_unannotated = True
-                break
-        
-        if has_unannotated:
-            # Attach annotations
-            for t in article.triples:
-                ann = db.query(models.Annotation).filter(
-                    models.Annotation.triple_id == t.id,
-                    models.Annotation.annotator == annotator
-                ).first()
-                
-                if ann:
-                    t.predicate = ann.predicate
-                    t.confidence = ann.confidence
-                    t.notes = ann.notes
-                    t.skipped = ann.skipped
-                    t.flagged = ann.flagged
-                else:
-                    t.predicate = None
-                    t.confidence = None
-                    t.notes = None
-                    t.skipped = False
-                    t.flagged = False
-            
-            return article
-    
-    # All completed - return first article for review (READ-ONLY mode)
-    if assigned_pmids:
-        first_article = db.query(models.Article).filter(
-            models.Article.pmid == assigned_pmids[0]
-        ).first()
-        
-        if first_article:
-            for t in first_article.triples:
-                ann = db.query(models.Annotation).filter(
-                    models.Annotation.triple_id == t.id,
-                    models.Annotation.annotator == annotator
-                ).first()
-                
-                if ann:
-                    t.predicate = ann.predicate
-                    t.confidence = ann.confidence
-                    t.notes = ann.notes
-                    t.skipped = ann.skipped
-                    t.flagged = ann.flagged
-                else:
-                    # Should not happen, but handle it
-                    t.predicate = None
-                    t.confidence = None
-                    t.notes = None
-                    t.skipped = False
-                    t.flagged = False
-            
-            return first_article
-    
-    # Should never reach here, but just in case
-    raise HTTPException(
-        status_code=404,
-        detail=f"No articles available"
-    )
 
 @app.post("/annotations", response_model=schemas.AnnotationResponse)
 def create_annotation(annotation: schemas.AnnotationCreate, db: Session = Depends(get_db)):
@@ -890,6 +823,42 @@ def get_all_flagged_triples(db: Session = Depends(get_db)):
     
     return result
 
+@app.get("/admin/skipped")
+def get_admin_skipped(annotator: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get skipped triples with full info - mirrors /admin/flagged"""
+    query = db.query(models.Annotation).filter(
+        models.Annotation.skipped == True
+    )
+    if annotator:
+        query = query.filter(
+            models.Annotation.annotator == normalize_annotator(annotator)
+        )
+    
+    annotations = query.all()
+    result = []
+    for ann in annotations:
+        triple = db.query(models.Triple).filter(
+            models.Triple.id == ann.triple_id
+        ).first()
+        if triple:
+            article = db.query(models.Article).filter(
+                models.Article.pmid == triple.pmid
+            ).first()
+            result.append({
+                "triple_id": ann.triple_id,
+                "pmid": triple.pmid,
+                "article_title": article.title if article else "",
+                "subject_text": triple.subject.text if triple.subject else "",
+                "object_text": triple.object.text if triple.object else "",
+                "relationship": triple.llm_suggestion or "",
+                "annotator": ann.annotator,
+                "predicate": ann.predicate,
+                "notes": ann.notes,
+                "skipped_at": ann.updated_at
+            })
+    
+    return result
+    
 @app.delete("/admin/triple/{triple_id}")
 def delete_triple(triple_id: int, db: Session = Depends(get_db)):
     """Delete a triple (admin only - for removing bad triples)"""
@@ -1042,38 +1011,105 @@ def get_review_items(annotator: str = "default", status: str = "flagged", db: Se
     
     return query.all()
 
-@app.get("/articles/skipped", response_model=List[str])
-def get_articles_with_skipped(annotator: str = "default", db: Session = Depends(get_db)):
+@app.get("/articles/next/unannotated", response_model=schemas.ArticleResponse)
+def get_next_unannotated_article(annotator: str = "default", db: Session = Depends(get_db)):
+    """Get next article assigned to this annotator"""
     annotator = normalize_annotator(annotator)
-    annotations = db.query(models.Annotation).filter(
-        models.Annotation.annotator == annotator,
-        models.Annotation.skipped == True
+    
+    # Get assignments for this annotator
+    assignments = db.query(models.ArticleAssignment).filter(
+        models.ArticleAssignment.annotator == annotator
     ).all()
     
-    pmids = set()
-    for ann in annotations:
-        triple = db.query(models.Triple).filter(models.Triple.id == ann.triple_id).first()
-        if triple:
-            pmids.add(triple.pmid)
+    # If NO assignments, return 404
+    if not assignments:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No articles assigned to {annotator}. Contact admin to assign articles."
+        )
     
-    return list(pmids)
-
-@app.get("/articles/flagged", response_model=List[str])
-def get_articles_with_flagged(annotator: str = "default", db: Session = Depends(get_db)):
-    annotator = normalize_annotator(annotator)
-    annotations = db.query(models.Annotation).filter(
-        models.Annotation.annotator == annotator,
-        models.Annotation.flagged == True
-    ).all()
+    # Get assigned PMIDs
+    assigned_pmids = [a.pmid for a in assignments]
     
-    pmids = set()
-    for ann in annotations:
-        triple = db.query(models.Triple).filter(models.Triple.id == ann.triple_id).first()
-        if triple:
-            pmids.add(triple.pmid)
+    # Find first assigned article with unannotated triples
+    for pmid in assigned_pmids:
+        article = db.query(models.Article).filter(
+            models.Article.pmid == pmid
+        ).first()
+        
+        if not article:
+            continue
+        
+        # Check if has unannotated triples
+        has_unannotated = False
+        for triple in article.triples:
+            annotation = db.query(models.Annotation).filter(
+                models.Annotation.triple_id == triple.id,
+                models.Annotation.annotator == annotator
+            ).first()
+            
+            if not annotation:
+                has_unannotated = True
+                break
+        
+        if has_unannotated:
+            # Attach annotations
+            for t in article.triples:
+                ann = db.query(models.Annotation).filter(
+                    models.Annotation.triple_id == t.id,
+                    models.Annotation.annotator == annotator
+                ).first()
+                
+                if ann:
+                    t.predicate = ann.predicate
+                    t.confidence = ann.confidence
+                    t.notes = ann.notes
+                    t.skipped = ann.skipped
+                    t.flagged = ann.flagged
+                else:
+                    t.predicate = None
+                    t.confidence = None
+                    t.notes = None
+                    t.skipped = False
+                    t.flagged = False
+            
+            return article
     
-    return list(pmids)
-
+    # All completed - return first article for review (READ-ONLY mode)
+    if assigned_pmids:
+        first_article = db.query(models.Article).filter(
+            models.Article.pmid == assigned_pmids[0]
+        ).first()
+        
+        if first_article:
+            for t in first_article.triples:
+                ann = db.query(models.Annotation).filter(
+                    models.Annotation.triple_id == t.id,
+                    models.Annotation.annotator == annotator
+                ).first()
+                
+                if ann:
+                    t.predicate = ann.predicate
+                    t.confidence = ann.confidence
+                    t.notes = ann.notes
+                    t.skipped = ann.skipped
+                    t.flagged = ann.flagged
+                else:
+                    # Should not happen, but handle it
+                    t.predicate = None
+                    t.confidence = None
+                    t.notes = None
+                    t.skipped = False
+                    t.flagged = False
+            
+            return first_article
+    
+    # Should never reach here, but just in case
+    raise HTTPException(
+        status_code=404,
+        detail=f"No articles available"
+    )
+    
 @app.get("/stats", response_model=schemas.StatsResponse)
 def get_stats(annotator: str = "default", db: Session = Depends(get_db)):
     annotator = normalize_annotator(annotator)
