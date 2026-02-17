@@ -128,8 +128,6 @@ export const AnnotationPanel: React.FC<Props> = ({
     );
   }
 
-
-
   return (
     <div className="h-full flex flex-col p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
       <div className="flex items-center justify-between mb-6">
@@ -310,7 +308,7 @@ export const AnnotationPanel: React.FC<Props> = ({
                         }`}
                       >
                         <div className="flex items-center gap-2">
-                          {isTopMatch && <span className="text-xs">⭐</span>}
+                          {isTopMatch && <span className="text-xs"></span>}
                           <div className="flex-1">
                             <div className="text-sm font-medium">{predInfo.name}</div>
                             {predInfo.description && (

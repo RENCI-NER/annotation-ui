@@ -16,28 +16,146 @@ interface ArticleAssignment {
 
 export const AdminAssignmentTable: React.FC = () => {
   const [articles, setArticles] = useState<ArticleAssignment[]>([]);
+  const [allAnnotators, setAllAnnotators] = useState<string[]>([]);
+  const [allKeywords, setAllKeywords] = useState<{keyword: string; count: number}[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newAnnotator, setNewAnnotator] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+  
   const [sortBy, setSortBy] = useState<'pmid' | 'title' | 'triples' | 'assigned'>('pmid');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [allAnnotators, setAllAnnotators] = useState<string[]>([]);
-  const [newAnnotator, setNewAnnotator] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<string | null>(null);
+  
+  const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
+  const [keywordsExpanded, setKeywordsExpanded] = useState(false);
+  const [keywordSearch, setKeywordSearch] = useState('');
+  const [extracting, setExtracting] = useState(false);
+  const [extractMessage, setExtractMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadAssignments();
+    // Filter keywords by search
+  const filteredKeywords = allKeywords.filter(({keyword}) =>
+    keyword.toLowerCase().includes(keywordSearch.toLowerCase())
+  );
+
+  const loadAnnotators = async () => {
+    try {
+      const data = await api.getAllAnnotatorNames();
+      setAllAnnotators(data);
+    } catch (err) {
+      console.error('Failed to load annotators:', err);
+    }
+  };
+
+  useEffect(() => { 
+    const init = async () => {
+      await loadAssignments();
+      await loadKeywords();
+      await loadAnnotators();  // Run last so it's not overwritten
+    };
+    init();
   }, []);
+  
+  useEffect(() => { 
+    if (!loading) loadAssignments();  // Guard against running on mount
+  }, [selectedKeywords]);
 
-
+  const loadKeywords = async () => {
+    try {
+      const data = await api.getAllKeywords();
+      setAllKeywords(data.keywords);
+    } catch (err) {
+      console.error('Failed to load keywords:', err);
+    }
+  };
 
   const loadAssignments = async () => {
     try {
-      const data = await api.getAssignmentMatrix();
+      const keywordFilter = selectedKeywords.join(',');
+      const data = await api.getAssignmentMatrix(keywordFilter || undefined);
       setArticles(data.articles);
-      setAllAnnotators(data.annotators);
+      // setAllAnnotators(data.annotators);
     } catch (err) {
       console.error('Failed to load assignments:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleKeyword = (keyword: string) => {
+    setSelectedKeywords(prev => 
+      prev.includes(keyword)
+        ? prev.filter(k => k !== keyword)
+        : [...prev, keyword]
+    );
+  };
+
+  const handleExtractKeywords = async () => {
+    setExtracting(true);
+    setExtractMessage(null);
+    
+    try {
+      const result = await api.extractAllKeywords();
+      setExtractMessage(`✅ ${result.message}`);
+      await loadKeywords();
+      await loadAssignments();
+    } catch (err: any) {
+      console.error('Extract error:', err);
+      setExtractMessage(`❌ Failed: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  const handleAddAnnotator = async () => {
+    const normalized = newAnnotator.trim().toLowerCase();
+    if (!normalized) return;
+    
+    if (allAnnotators.includes(normalized)) {
+      setMessage('❌ Annotator already exists');
+      return;
+    }
+    
+    try {
+      await api.createAnnotator(normalized);  // Save to DB
+      await loadAnnotators();                  // Reload from DB
+      setNewAnnotator('');
+      setMessage(`✅ Added annotator: ${normalized}`);
+    } catch (err: any) {
+      setMessage(`❌ Failed to add: ${err.message}`);
+    }
+  };
+  
+  const handleRemoveAnnotator = async (annotator: string) => {
+    if (!confirm(`Remove ${annotator}? This will delete all their assignments.`)) return;
+    
+    try {
+      await api.deleteAnnotatorAssignments(annotator);
+      await loadAnnotators();  // ✅ Reload from DB instead of filtering local state
+      await loadAssignments();
+      setMessage(`✅ Removed ${annotator}`);
+    } catch (err: any) {
+      setMessage(`❌ Failed to remove: ${err.message}`);
+    }
+  };
+
+ const handleAssign = async (pmid: string, annotator: string) => {
+    try {
+      await api.assignSpecificArticle(pmid, annotator);
+      await loadAssignments();
+      setMessage(`✅ Assigned PMID ${pmid} to ${annotator}`);
+    } catch (err: any) {
+      setMessage(`❌ ${err.message}`);
+    }
+  };
+
+  const handleUnassign = async (pmid: string, annotator: string) => {
+    if (!confirm(`Remove ${annotator}'s assignment for PMID ${pmid}?`)) return;
+    
+    try {
+      await api.unassignArticle(pmid, annotator);
+      await loadAssignments();
+      setMessage(`✅ Removed assignment`);
+    } catch (err: any) {
+      setMessage(`❌ ${err.message}`);
     }
   };
 
@@ -78,56 +196,7 @@ export const AdminAssignmentTable: React.FC = () => {
       setSortOrder('asc');
     }
   };
-
-  const handleAddAnnotator = () => {
-    const normalized = newAnnotator.trim().toLowerCase();
-    if (!normalized) return;
-    
-    if (allAnnotators.includes(normalized)) {
-      setMessage('❌ Annotator already exists');
-      return;
-    }
-    
-    setAllAnnotators([...allAnnotators, normalized]);
-    setNewAnnotator('');
-    setMessage(`✅ Added annotator: ${normalized}`);
-  };
-
-  const handleRemoveAnnotator = async (annotator: string) => {
-    if (!confirm(`Remove ${annotator}? This will delete all their assignments.`)) return;
-    
-    try {
-      await api.deleteAnnotatorAssignments(annotator);
-      setAllAnnotators(allAnnotators.filter(a => a !== annotator));
-      await loadAssignments();
-      setMessage(`✅ Removed ${annotator}`);
-    } catch (err: any) {
-      setMessage(`❌ Failed to remove: ${err.message}`);
-    }
-  };
-
-  const handleAssign = async (pmid: string, annotator: string) => {
-    try {
-      await api.assignSpecificArticle(pmid, annotator);
-      await loadAssignments();
-      setMessage(`✅ Assigned PMID ${pmid} to ${annotator}`);
-    } catch (err: any) {
-      setMessage(`❌ ${err.message}`);
-    }
-  };
-
-  const handleUnassign = async (pmid: string, annotator: string) => {
-    if (!confirm(`Remove ${annotator}'s assignment for PMID ${pmid}?`)) return;
-    
-    try {
-      await api.unassignArticle(pmid, annotator);
-      await loadAssignments();
-      setMessage(`✅ Removed assignment`);
-    } catch (err: any) {
-      setMessage(`❌ ${err.message}`);
-    }
-  };
-
+ 
   const getAssignmentCounts = (pmid: string) => {
     const article = articles.find(a => a.pmid === pmid);
     if (!article) return { assigned: 0, completed: 0 };
@@ -160,6 +229,7 @@ export const AdminAssignmentTable: React.FC = () => {
 
   return (
     <div className="space-y-6">
+
       {/* Annotator Management */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold mb-4 dark:text-white">Manage Annotators</h3>
@@ -214,7 +284,154 @@ export const AdminAssignmentTable: React.FC = () => {
           )}
         </div>
       </div>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        {/* Clickable Header to Toggle */}
+        <button
+          onClick={() => setKeywordsExpanded(!keywordsExpanded)}
+          className="w-full flex items-center justify-between p-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-semibold dark:text-white">
+              🏷️ Filter by Keywords/Topics
+            </h3>
+            {selectedKeywords.length > 0 && (
+              <span className="px-2 py-1 bg-blue-500 text-white text-xs rounded-full font-semibold">
+                {selectedKeywords.length} active
+              </span>
+            )}
+            {selectedKeywords.length > 0 && !keywordsExpanded && (
+              <div className="flex flex-wrap gap-1">
+                {selectedKeywords.map(k => (
+                  <span key={k} className="px-2 py-1 bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200 text-xs rounded-full">
+                    {k}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+            {selectedKeywords.length > 0 && (
+              <span className="text-xs text-blue-600 dark:text-blue-400">
+                {articles.length} articles matched
+              </span>
+            )}
+            <svg
+              className={`w-5 h-5 transition-transform duration-200 ${keywordsExpanded ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </button>
 
+        {/* Collapsible Content */}
+        {keywordsExpanded && (
+          <div className="px-6 pb-6 border-t border-gray-200 dark:border-gray-700">
+            
+            {/* Active Filters */}
+            {selectedKeywords.length > 0 && (
+              <div className="mt-4 mb-4 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-blue-800 dark:text-blue-200">
+                    Active Filters:
+                  </span>
+                  <button
+                    onClick={() => setSelectedKeywords([])}
+                    className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                  >
+                    Clear All
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedKeywords.map(keyword => (
+                    <button
+                      key={keyword}
+                      onClick={() => toggleKeyword(keyword)}
+                      className="flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded-full text-sm hover:bg-blue-600 transition-colors"
+                    >
+                      {keyword}
+                      <span className="text-blue-200 hover:text-white">✕</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Keyword Search */}
+            {allKeywords.length > 0 && (
+              <div className="mt-4 mb-3">
+                <input
+                  type="text"
+                  value={keywordSearch}
+                  onChange={(e) => setKeywordSearch(e.target.value)}
+                  placeholder="Search keywords..."
+                  className="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
+
+            {/* Keywords Grid */}
+            {allKeywords.length > 0 ? (
+              <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
+                {filteredKeywords.map(({keyword, count}) => (
+                  <button
+                    key={keyword}
+                    onClick={() => toggleKeyword(keyword)}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                      selectedKeywords.includes(keyword)
+                        ? 'bg-blue-500 text-white shadow-md scale-105'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 hover:scale-105'
+                    }`}
+                  >
+                    {keyword}
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                      selectedKeywords.includes(keyword)
+                        ? 'bg-blue-400 text-white'
+                        : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-400'
+                    }`}>
+                      {count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 text-center py-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div className="text-gray-500 dark:text-gray-400 mb-3 text-sm">
+                  No keywords found in corpus
+                </div>
+                
+                {extractMessage && (
+                  <div className={`mb-3 p-2 rounded text-sm ${
+                    extractMessage.startsWith('✅')
+                      ? 'bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-200'
+                      : 'bg-red-50 text-red-700 dark:bg-red-900 dark:text-red-200'
+                  }`}>
+                    {extractMessage}
+                  </div>
+                )}
+                
+                <button
+                  onClick={handleExtractKeywords}
+                  disabled={extracting}
+                  className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white rounded-lg text-sm transition-colors"
+                >
+                  {extracting ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                      </svg>
+                      Extracting...
+                    </span>
+                  ) : '🔍 Auto-Extract Keywords from Titles/Abstracts'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>  
       {/* Assignment Matrix */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
         <div className="p-6 border-b border-gray-200 dark:border-gray-700">

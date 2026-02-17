@@ -46,19 +46,8 @@ export const AdminDashboard: React.FC = () => {
     // formData.append('file', uploadFile);
 
     try {
-      // Fix: Use import.meta.env for Vite
-      // const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
       const result = await api.uploadCorpus(uploadFile);
-      // console.log('Uploading to:', `${apiBase}/admin/upload-corpus`);  // logging
-
-      // const response = await fetch(`${apiBase}/admin/upload-corpus`, {
-      //   method: 'POST',
-      //   body: formData,
-      // });
-
-      // console.log('Response status:', response.status);
-      // const result = await response.json();
-
+      
       if (result) {
         setUploadMessage(`✅ ${result.message}: ${result.articles_added} articles, ${result.triples_added} triples added`);
         setUploadFile(null);

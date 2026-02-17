@@ -9,6 +9,32 @@ console.log('API_BASE:', API_BASE);
 
 
 export const api = {
+  createAnnotator: async (name: string) => {
+    const response = await axios.post(`${API_BASE}/admin/annotator/${name}`);
+    return response.data;
+  },
+  
+  getAllAnnotatorNames: async () => {
+    const response = await axios.get(`${API_BASE}/admin/all-annotators`);
+    return response.data;
+  },
+  
+  getAssignmentMatrix: async (keywords?: string) => {
+    const params = keywords ? { keywords } : {};
+    const response = await axios.get(`${API_BASE}/admin/assignment-matrix`, { params });
+    return response.data;
+  },
+
+  getAllKeywords: async () => {
+    const response = await axios.get(`${API_BASE}/admin/keywords`);
+    return response.data;
+  },
+
+  extractAllKeywords: async () => {
+    const response = await axios.post(`${API_BASE}/admin/extract-all-keywords`);
+    return response.data;
+  },
+
   getSkippedArticles: async (annotator: string = 'default'): Promise<string[]> => {
     const response = await axios.get(`${API_BASE}/articles/skipped`, {
       params: { annotator }
@@ -129,11 +155,6 @@ export const api = {
     const response = await axios.get(`${API_BASE}/admin/comparison/${pmid}`);
     return response.data;
   },
-
-  getAssignmentMatrix: async () => {
-    const response = await axios.get(`${API_BASE}/admin/assignment-matrix`);
-    return response.data;
-  },
   
   assignSpecificArticle: async (pmid: string, annotator: string) => {
     const response = await axios.post(`${API_BASE}/admin/assign-article/${pmid}/${annotator}`);
@@ -144,6 +165,7 @@ export const api = {
     const response = await axios.delete(`${API_BASE}/admin/unassign-article/${pmid}/${annotator}`);
     return response.data;
   },
+
   uploadCorpus: async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
