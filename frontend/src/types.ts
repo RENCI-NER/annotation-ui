@@ -11,10 +11,16 @@ export interface Entity {
 export interface Triple {
   id: number;
   subject: Entity;
+  subject_start: number;
+  subject_end: number;
   object: Entity;
+  object_start: number;
+  object_end: number;
   distance_words: number;
   same_sentence: boolean;
   llm_suggestion: string | null;
+  relationship_start: number;
+  relationship_end: number;
   predicate: string | null;
   confidence: string | null;
   notes: string | null |undefined;

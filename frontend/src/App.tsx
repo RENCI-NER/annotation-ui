@@ -646,13 +646,18 @@ function App() {
               <span className="text-xs font-mono text-slate-400 mr-2">
                 PMID {article.pmid}
               </span>
-              <span className="text-sm font-semibold text-slate-800 dark:text-white
-                line-clamp-1">
+              <span className="text-sm font-semibold text-slate-800 dark:text-white line-clamp-1">
                 {article.title}
               </span>
             </div>
-            <div className="text-xs text-slate-400 shrink-0 tabular-nums">
-              {article.year} · {article.target_entity_count} entities
+            <div className="text-xs text-slate-400 shrink-0 tabular-nums flex items-center gap-3">
+              <span>{article.year} · {article.target_entity_count} entities</span>
+              {/*  total assigned articles count */}
+              {progress && (
+                <span className="text-slate-500 dark:text-slate-400">
+                  Article {progress.annotated_articles + 1} of {progress.total_articles}
+                </span>
+              )}
             </div>
           </div>
 
