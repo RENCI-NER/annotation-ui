@@ -30,6 +30,9 @@ const getEntityLinks = (normalizedId: string, biolinkType: string) => {
   } else if (prefix === 'UniProtKB') {
     links.push({ label: 'UniProt', url: `https://www.uniprot.org/uniprotkb/${id}` });
   }
+  else if (prefix === 'GTOPDB') {
+    links.push({ label: 'GtoPdb', url: `https://www.guidetopharmacology.org/GRAC/LigandDisplayForward?ligandId=${id}` });
+  }
   const identifiersPrefix = prefix === 'UniProtKB' ? 'uniprot' : prefix.toUpperCase();
   links.unshift({label: 'Identifiers.org',  url: `http://identifiers.org/${identifiersPrefix}:${id}`});
   return links;
