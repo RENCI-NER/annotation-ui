@@ -67,3 +67,92 @@ export interface AnnotationCreate {
   flagged: boolean;
   annotator: string;
 }
+
+
+// ── TMKP Types ──────────────────────────────────────────────────────────────
+
+export interface TmkpEvidence {
+  id: number;
+  publication: string;
+  supporting_text: string;
+  subject_start: number;
+  subject_end: number;
+  object_start: number;
+  object_end: number;
+  extraction_confidence: number;
+  document_year: number | null;
+  section_type: string | null;
+}
+
+export interface TmkpEdge {
+  id: number;
+  edge_id: string;
+  category: string | null;
+  subject_id: string;
+  subject_name: string | null;
+  predicate: string;
+  object_id: string;
+  object_name: string | null;
+  qualified_predicate: string | null;
+  object_aspect_qualifier: string | null;
+  object_direction_qualifier: string | null;
+  confidence_score: number;
+  evidence_count: number;
+  knowledge_level: string | null;
+  agent_type: string | null;
+  evidences: TmkpEvidence[];
+  verdict: TmkpVerdict | null;
+  verdict_notes: string | null;
+}
+
+export type TmkpVerdict = 'correct' | 'swap_so' | 'wrong_predicate' | 'wrong_subject' | 'wrong_object' | 'reject' | 'skip';
+
+export interface TmkpAnnotationItem {
+  edge_db_id: number;
+  evidence_id: number;
+  edge_id: string;
+  category: string | null;
+  subject_id: string;
+  subject_name: string | null;
+  predicate: string;
+  object_id: string;
+  object_name: string | null;
+  qualified_predicate: string | null;
+  object_aspect_qualifier: string | null;
+  object_direction_qualifier: string | null;
+  confidence_score: number;
+  evidence_count: number;
+  knowledge_level: string | null;
+  agent_type: string | null;
+  evidence: TmkpEvidence;
+  verdict: TmkpVerdict | null;
+  verdict_notes: string | null;
+  item_index: number;
+  total_items: number;
+}
+
+export interface TmkpVerificationCreate {
+  edge_db_id: number;
+  evidence_id?: number | null;
+  verdict: TmkpVerdict;
+  corrected_predicate?: string | null;
+  corrected_subject?: string | null;
+  corrected_object?: string | null;
+  corrected_qualifiers?: Record<string, string> | null;
+  notes?: string | null;
+  annotator: string;
+}
+
+export interface TmkpProgress {
+  total_edges: number;
+  verified_edges: number;
+  correct_count: number;
+  rejected_count: number;
+  swapped_count: number;
+  wrong_predicate_count: number;
+  wrong_subject_count: number;
+  wrong_object_count: number;
+  skipped_count: number;
+  remaining: number;
+  completion_percentage: number;
+}

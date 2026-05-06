@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(curl -s http://localhost:5173/tmkp-triples)",
+      "Bash(curl -s http://localhost:5173/relate-triples)",
+      "Bash(npx tsc *)",
+      "Bash(pkill -f \"uvicorn main:app\")",
+      "Bash(pkill -f \"vite --port 5173\")",
+      "Bash(python3 -c ' *)",
+      "Bash(npm run *)",
+      "Bash(python3 node_norm.py --backfill)",
+      "Bash(python3 -c \"from main import app; print\\('Backend OK'\\)\")",
+      "Bash(python3 -c \"from main import app; print\\([r.path for r in app.routes if 'export' in r.path]\\)\")"
+    ]
+  }
+}

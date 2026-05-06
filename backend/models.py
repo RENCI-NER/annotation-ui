@@ -86,11 +86,89 @@ class ArticleAssignment(Base):
 
 class Assignment(Base):
     __tablename__ = "assignments"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     pmid = Column(String, ForeignKey("articles.pmid"))
     annotator = Column(String)
     assigned_at = Column(DateTime, default=datetime.utcnow)
     status = Column(String, default="pending")  # pending, in_progress, completed
-    
-    article = relationship("Article")   
+
+    article = relationship("Article")
+
+
+# ── TMKP Models ──────────────────────────────────────────────────────────────
+
+class TmkpEdge(Base):
+    __tablename__ = "tmkp_edges"
+
+    id = Column(Integer, primary_key=True, index=True)
+    edge_id = Column(String, unique=True, index=True)
+    category = Column(String)
+    subject_id = Column(String, index=True)
+    subject_name = Column(String, nullable=True)
+    predicate = Column(String)
+    object_id = Column(String, index=True)
+    object_name = Column(String, nullable=True)
+    qualified_predicate = Column(String, nullable=True)
+    object_aspect_qualifier = Column(String, nullable=True)
+    object_direction_qualifier = Column(String, nullable=True)
+    confidence_score = Column(Float)
+    evidence_count = Column(Integer, default=1)
+    knowledge_level = Column(String, nullable=True)
+    agent_type = Column(String, nullable=True)
+
+    evidences = relationship("TmkpEvidence", back_populates="edge", cascade="all, delete-orphan")
+    verifications = relationship("TmkpVerification", back_populates="edge", cascade="all, delete-orphan")
+    assignments = relationship("TmkpAssignment", back_populates="edge", cascade="all, delete-orphan")
+
+
+class TmkpEvidence(Base):
+    __tablename__ = "tmkp_evidences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    edge_db_id = Column(Integer, ForeignKey("tmkp_edges.id"))
+    study_id = Column(String, nullable=True)
+    result_id = Column(String, nullable=True)
+    publication = Column(String)
+    supporting_text = Column(Text)
+    subject_start = Column(Integer)
+    subject_end = Column(Integer)
+    object_start = Column(Integer)
+    object_end = Column(Integer)
+    extraction_confidence = Column(Float)
+    document_year = Column(Integer, nullable=True)
+    section_type = Column(String, nullable=True)
+
+    edge = relationship("TmkpEdge", back_populates="evidences")
+
+
+class TmkpVerification(Base):
+    __tablename__ = "tmkp_verifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    edge_db_id = Column(Integer, ForeignKey("tmkp_edges.id"))
+    evidence_id = Column(Integer, ForeignKey("tmkp_evidences.id"), nullable=True)
+    annotator = Column(String, index=True)
+    verdict = Column(String)  # correct, swap_so, wrong_predicate, wrong_subject, wrong_object, reject, skip
+    corrected_predicate = Column(String, nullable=True)
+    corrected_subject = Column(String, nullable=True)
+    corrected_object = Column(String, nullable=True)
+    corrected_qualifiers = Column(JSON, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    edge = relationship("TmkpEdge", back_populates="verifications")
+    evidence = relationship("TmkpEvidence")
+
+
+class TmkpAssignment(Base):
+    __tablename__ = "tmkp_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    annotator = Column(String, index=True)
+    edge_db_id = Column(Integer, ForeignKey("tmkp_edges.id"))
+    assigned_at = Column(DateTime, default=datetime.utcnow)
+    completed = Column(Boolean, default=False)
+
+    edge = relationship("TmkpEdge", back_populates="assignments")

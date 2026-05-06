@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Article, Progress, Stats, AnnotationCreate } from './types';
+import { Article, Progress, Stats, AnnotationCreate, TmkpAnnotationItem, TmkpProgress, TmkpVerificationCreate } from './types';
 
 const API_BASE = window.location.hostname === 'localhost' 
   ? 'http://localhost:8000'  // Development
@@ -7,6 +7,14 @@ const API_BASE = window.location.hostname === 'localhost'
 
 console.log('API_BASE:', API_BASE);
 
+export const adminAuth = async (password: string): Promise<boolean> => {
+  try {
+    await axios.post(`${API_BASE}/admin/auth`, { password });
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 export const api = {
   createAnnotator: async (name: string) => {
@@ -206,5 +214,73 @@ export interface AdminStats {
   total_assigned: number;
   total_unassigned: number;
   total_completed: number;
+};
+
+
+// ── TMKP API ────────────────────────────────────────────────────────────────
+
+export const tmkpApi = {
+  getNextItem: async (annotator: string = 'default'): Promise<TmkpAnnotationItem> => {
+    const response = await axios.get(`${API_BASE}/tmkp/items/next`, {
+      params: { annotator },
+    });
+    return response.data;
+  },
+
+  getItem: async (evidenceId: number, annotator: string = 'default'): Promise<TmkpAnnotationItem> => {
+    const response = await axios.get(`${API_BASE}/tmkp/items/${evidenceId}`, {
+      params: { annotator },
+    });
+    return response.data;
+  },
+
+  listItems: async (annotator: string = 'default', skip = 0, limit = 50): Promise<TmkpAnnotationItem[]> => {
+    const response = await axios.get(`${API_BASE}/tmkp/items`, {
+      params: { annotator, skip, limit },
+    });
+    return response.data;
+  },
+
+  saveVerification: async (verification: TmkpVerificationCreate) => {
+    const response = await axios.post(`${API_BASE}/tmkp/verify`, verification);
+    return response.data;
+  },
+
+  getProgress: async (annotator: string = 'default'): Promise<TmkpProgress> => {
+    const response = await axios.get(`${API_BASE}/tmkp/progress`, {
+      params: { annotator },
+    });
+    return response.data;
+  },
+
+  getAdminStats: async () => {
+    const response = await axios.get(`${API_BASE}/tmkp/admin/stats`);
+    return response.data;
+  },
+
+  getAnnotators: async () => {
+    const response = await axios.get(`${API_BASE}/tmkp/admin/annotators`);
+    return response.data;
+  },
+
+  exportVerifications: async () => {
+    const response = await axios.get(`${API_BASE}/tmkp/admin/export`);
+    return response.data;
+  },
+
+  exportRaw: async (annotator?: string) => {
+    const params = annotator ? { annotator } : {};
+    const response = await axios.get(`${API_BASE}/tmkp/admin/export/raw`, { params });
+    return response.data;
+  },
+
+  uploadJsonl: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await axios.post(`${API_BASE}/tmkp/admin/upload-jsonl`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
 };
 

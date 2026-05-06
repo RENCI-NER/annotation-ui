@@ -71,6 +71,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from tmkp_routes import router as tmkp_router
+app.include_router(tmkp_router)
+
+import os
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
+
+@app.post("/admin/auth")
+def admin_auth(body: dict):
+    if body.get("password") == ADMIN_PASSWORD:
+        return {"authenticated": True}
+    raise HTTPException(status_code=401, detail="Invalid admin password")
+
 @app.get("/")
 def root():
     return {"message": "Relation Annotation API"}
@@ -576,44 +588,76 @@ def get_annotators(db: Session = Depends(get_db)):
 
 @app.post("/admin/assign", response_model=schemas.AssignmentResponse)
 def assign_articles(assignment: schemas.AssignmentCreate, db: Session = Depends(get_db)):
+    """
+    Assign articles with dual-annotator priority:
+    1. Articles with exactly 1 other annotator (needs 2nd reviewer for IAA)
+    2. Articles with 0 annotators (fresh)
+    Never assigns the same article to the same annotator twice.
+    """
     assignment.annotator = normalize_annotator(assignment.annotator)
+    from collections import defaultdict
+    import random
 
-    # Get already assigned PMIDs
-    assigned_pmids = [a.pmid for a in db.query(models.ArticleAssignment).all()]
-    
-    # Get unassigned articles
-    unassigned = db.query(models.Article).filter(
-        ~models.Article.pmid.in_(assigned_pmids) if assigned_pmids else True
-    ).limit(assignment.num_articles).all()
-    
-    if len(unassigned) == 0:
-        return schemas.AssignmentResponse(
+    already_assigned = set(
+        a.pmid for a in db.query(models.ArticleAssignment).filter(
+            models.ArticleAssignment.annotator == assignment.annotator
+        ).all()
+    )
+
+    all_assignments = db.query(models.ArticleAssignment).all()
+    article_annotators = defaultdict(set)
+    for a in all_assignments:
+        article_annotators[a.pmid].add(a.annotator)
+
+    all_pmids = [a.pmid for a in db.query(models.Article).all()]
+
+    needs_second = []
+    needs_first = []
+
+    for pmid in all_pmids:
+        if pmid in already_assigned:
+            continue
+        annotators = article_annotators.get(pmid, set())
+        count = len(annotators)
+        if count == 1 and assignment.annotator not in annotators:
+            needs_second.append(pmid)
+        elif count == 0:
+            needs_first.append(pmid)
+
+    random.shuffle(needs_second)
+    random.shuffle(needs_first)
+
+    to_assign = []
+    for pmid in needs_second:
+        if len(to_assign) >= assignment.num_articles:
+            break
+        to_assign.append(pmid)
+
+    for pmid in needs_first:
+        if len(to_assign) >= assignment.num_articles:
+            break
+        to_assign.append(pmid)
+
+    for pmid in to_assign:
+        new_assignment = models.ArticleAssignment(
             annotator=assignment.annotator,
-            assigned_articles=0,
-            message="No unassigned articles available"
+            pmid=pmid,
         )
-    added = 0
-    # Add new assignments (doesn't remove existing ones)
-    for article in unassigned:
-        existing = db.query(models.ArticleAssignment).filter(
-            models.ArticleAssignment.annotator == assignment.annotator,
-            models.ArticleAssignment.pmid == article.pmid
-        ).first()
-        
-        if not existing:
-            new_assignment = models.ArticleAssignment(
-                annotator=assignment.annotator,
-                pmid=article.pmid
-            )
-            db.add(new_assignment)
-            added += 1
-    
+        db.add(new_assignment)
+
     db.commit()
-    
+
+    from_second = sum(1 for p in to_assign if p in set(needs_second))
+    from_fresh = len(to_assign) - from_second
+
+    message = f"Assigned {len(to_assign)} articles ({from_second} for dual-review, {from_fresh} fresh)"
+    if len(to_assign) == 0:
+        message = "No articles available to assign"
+
     return schemas.AssignmentResponse(
         annotator=assignment.annotator,
-        assigned_articles=added,
-        message=f"Successfully assigned {added} new articles"
+        assigned_articles=len(to_assign),
+        message=message,
     )
 
 @app.get("/admin/stats")

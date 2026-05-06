@@ -128,3 +128,125 @@ class AssignmentResponse(BaseModel):
     annotator: str
     assigned_articles: int
     message: str
+
+
+# ── TMKP Schemas ─────────────────────────────────────────────────────────────
+
+class TmkpEvidenceResponse(BaseModel):
+    id: int
+    publication: str
+    supporting_text: str
+    subject_start: int
+    subject_end: int
+    object_start: int
+    object_end: int
+    extraction_confidence: float
+    document_year: Optional[int] = None
+    section_type: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class TmkpEdgeResponse(BaseModel):
+    id: int
+    edge_id: str
+    category: Optional[str] = None
+    subject_id: str
+    subject_name: Optional[str] = None
+    predicate: str
+    object_id: str
+    object_name: Optional[str] = None
+    qualified_predicate: Optional[str] = None
+    object_aspect_qualifier: Optional[str] = None
+    object_direction_qualifier: Optional[str] = None
+    confidence_score: float
+    evidence_count: int
+    knowledge_level: Optional[str] = None
+    agent_type: Optional[str] = None
+    evidences: List[TmkpEvidenceResponse] = []
+    verdict: Optional[str] = None
+    verdict_notes: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class TmkpAnnotationItem(BaseModel):
+    """One unit of annotation: a triple paired with a single evidence."""
+    edge_db_id: int
+    evidence_id: int
+    edge_id: str
+    category: Optional[str] = None
+    subject_id: str
+    subject_name: Optional[str] = None
+    predicate: str
+    object_id: str
+    object_name: Optional[str] = None
+    qualified_predicate: Optional[str] = None
+    object_aspect_qualifier: Optional[str] = None
+    object_direction_qualifier: Optional[str] = None
+    confidence_score: float
+    evidence_count: int
+    knowledge_level: Optional[str] = None
+    agent_type: Optional[str] = None
+    evidence: TmkpEvidenceResponse
+    verdict: Optional[str] = None
+    verdict_notes: Optional[str] = None
+    item_index: int
+    total_items: int
+
+
+class TmkpVerificationCreate(BaseModel):
+    edge_db_id: int
+    evidence_id: Optional[int] = None
+    verdict: str
+    corrected_predicate: Optional[str] = None
+    corrected_subject: Optional[str] = None
+    corrected_object: Optional[str] = None
+    corrected_qualifiers: Optional[dict] = None
+    notes: Optional[str] = None
+    annotator: str = "default"
+
+
+class TmkpVerificationResponse(BaseModel):
+    id: int
+    edge_db_id: int
+    evidence_id: Optional[int] = None
+    annotator: str
+    verdict: str
+    corrected_predicate: Optional[str] = None
+    corrected_subject: Optional[str] = None
+    corrected_object: Optional[str] = None
+    corrected_qualifiers: Optional[dict] = None
+    notes: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class TmkpProgressResponse(BaseModel):
+    total_edges: int
+    verified_edges: int
+    correct_count: int
+    rejected_count: int
+    swapped_count: int
+    wrong_predicate_count: int
+    wrong_subject_count: int
+    wrong_object_count: int
+    skipped_count: int
+    remaining: int
+    completion_percentage: float
+
+
+class TmkpAssignmentCreate(BaseModel):
+    annotator: str
+    num_edges: int
+
+
+class TmkpAssignmentResponse(BaseModel):
+    annotator: str
+    assigned_edges: int
+    message: str
