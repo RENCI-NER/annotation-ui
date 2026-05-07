@@ -606,61 +606,101 @@ const VerdictPanel: React.FC<{
   );
 };
 
+// ── Item Progress Strip ──────────────────────────────────────────────────────
+const BATCH_SIZE = 100;
+
+const verdictDotColor = (verdict: TmkpVerdict | null): string => {
+  if (!verdict) return 'bg-slate-300 dark:bg-slate-600';
+  switch (verdict) {
+    case 'correct': return 'bg-emerald-400';
+    case 'swap_so': return 'bg-blue-400';
+    case 'wrong_predicate': return 'bg-amber-400';
+    case 'wrong_subject': return 'bg-cyan-400';
+    case 'wrong_object': return 'bg-orange-400';
+    case 'reject': return 'bg-red-400';
+    case 'skip': return 'bg-slate-400';
+    default: return 'bg-slate-300 dark:bg-slate-600';
+  }
+};
+
+const ProgressStrip: React.FC<{
+  items: TmkpAnnotationItem[];
+  currentIndex: number;
+  onJump: (idx: number) => void;
+}> = ({ items, currentIndex, onJump }) => {
+  const answeredCount = items.filter(i => i.verdict).length;
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
+      <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+          Batch Progress
+        </span>
+        <span className="text-[11px] font-bold tabular-nums text-slate-600 dark:text-slate-300">
+          {answeredCount} / {items.length} done
+        </span>
+      </div>
+      <div className="px-3 py-2.5 flex flex-wrap gap-[3px]">
+        {items.map((it, idx) => (
+          <button
+            key={it.evidence_id}
+            onClick={() => onJump(idx)}
+            title={`#${idx + 1}${it.verdict ? ` — ${it.verdict.replace('_', ' ')}` : ' — unanswered'}`}
+            className={`w-[10px] h-[10px] rounded-sm transition-all duration-100
+              ${verdictDotColor(it.verdict)}
+              ${idx === currentIndex ? 'ring-2 ring-violet-500 ring-offset-1 dark:ring-offset-slate-800 scale-150' : 'hover:scale-150 hover:ring-1 hover:ring-slate-400'}
+            `}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // ── TmkpApp ─────────────────────────────────────────────────────────────────
 export const TmkpApp: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const [annotator, setAnnotator] = useState<string | null>(() => localStorage.getItem('tmkp_annotator'));
-  const [item, setItem] = useState<TmkpAnnotationItem | null>(null);
-  const [itemHistory, setItemHistory] = useState<TmkpAnnotationItem[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [batch, setBatch] = useState<TmkpAnnotationItem[]>([]);
+  const [batchIndex, setBatchIndex] = useState(0);
   const [progress, setProgress] = useState<TmkpProgress | null>(null);
   const [loading, setLoading] = useState(true);
-  const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reviewMode, setReviewMode] = useState(false);
-  const [reviewItems, setReviewItems] = useState<TmkpAnnotationItem[]>([]);
-  const [reviewIndex, setReviewIndex] = useState(0);
+  const [reviewPage, setReviewPage] = useState(0);
 
   const isAdminPage = location.pathname.endsWith('/admin');
-  const historyIndexRef = React.useRef(historyIndex);
-  historyIndexRef.current = historyIndex;
+  const item = batch[batchIndex] || null;
 
-  const loadNext = useCallback(async (isInitial = false) => {
+  const loadBatch = useCallback(async () => {
     if (!annotator) return;
     try {
-      if (isInitial) setLoading(true);
-      else setFetching(true);
+      setLoading(true);
       setError(null);
-      const data = await tmkpApi.getNextItem(annotator);
-      setItem(data);
-      setItemHistory(prev => {
-        const truncated = prev.slice(0, historyIndexRef.current + 1);
-        return [...truncated, data];
-      });
-      setHistoryIndex(historyIndexRef.current + 1);
+      const items = await tmkpApi.getBatch(annotator, BATCH_SIZE);
+      setBatch(items);
+      setBatchIndex(0);
     } catch (err: any) {
-      const msg = err.response?.data?.detail || 'Failed to load edge';
+      const msg = err.response?.data?.detail || 'Failed to load items';
       setError(msg);
-      setItem(null);
+      setBatch([]);
     } finally {
       setLoading(false);
-      setFetching(false);
     }
   }, [annotator]);
 
   const loadProgress = useCallback(async () => {
     if (!annotator) return;
     try { setProgress(await tmkpApi.getProgress(annotator)); }
-    catch (err) { console.error('Failed to load progress:', err); }
+    catch { /* ignore */ }
   }, [annotator]);
 
   const initRef = React.useRef(false);
   useEffect(() => {
     if (annotator && !isAdminPage && !initRef.current) {
       initRef.current = true;
-      loadNext(true);
+      loadBatch();
       loadProgress();
     }
   }, [annotator]);
@@ -678,40 +718,26 @@ export const TmkpApp: React.FC = () => {
         notes: extra?.notes,
         annotator,
       });
-      const updatedItem = { ...item, verdict, verdict_notes: extra?.notes || null };
-      setItem(updatedItem);
-      setItemHistory(prev => {
-        const copy = [...prev];
-        copy[historyIndexRef.current] = updatedItem;
-        return copy;
-      });
+      const updated = [...batch];
+      updated[batchIndex] = { ...item, verdict, verdict_notes: extra?.notes || null };
+      setBatch(updated);
       loadProgress();
 
       if (verdict !== 'wrong_predicate' && verdict !== 'wrong_subject' && verdict !== 'wrong_object') {
         setTimeout(() => {
-          loadNext();
-        }, 600);
+          const nextUnanswered = updated.findIndex((it, i) => i > batchIndex && !it.verdict);
+          if (nextUnanswered !== -1) {
+            setBatchIndex(nextUnanswered);
+          } else {
+            const firstUnanswered = updated.findIndex(it => !it.verdict);
+            if (firstUnanswered !== -1) {
+              setBatchIndex(firstUnanswered);
+            }
+          }
+        }, 500);
       }
-    } catch (err) {
-      console.error('Failed to save verification:', err);
-    }
-  };
-
-  const handlePrevious = () => {
-    if (historyIndex > 0) {
-      const prev = historyIndex - 1;
-      setHistoryIndex(prev);
-      setItem(itemHistory[prev]);
-    }
-  };
-
-  const handleNext = () => {
-    if (historyIndex < itemHistory.length - 1) {
-      const next = historyIndex + 1;
-      setHistoryIndex(next);
-      setItem(itemHistory[next]);
-    } else {
-      loadNext();
+    } catch {
+      // silently fail
     }
   };
 
@@ -724,14 +750,34 @@ export const TmkpApp: React.FC = () => {
     if (!annotator) return;
     setLoading(true);
     setError(null);
+    setReviewPage(0);
     try {
-      const items = await tmkpApi.listItems(annotator, 0, 9999);
-      setReviewItems(items);
-      setReviewIndex(0);
+      const items = await tmkpApi.listItems(annotator, 0, BATCH_SIZE);
+      setBatch(items);
+      setBatchIndex(0);
       setReviewMode(true);
-      setItem(items[0] || null);
-    } catch (err) {
-      console.error('Failed to load review items:', err);
+    } catch {
+      setError('Failed to load review items');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadMoreReview = async () => {
+    if (!annotator) return;
+    const nextPage = reviewPage + 1;
+    setLoading(true);
+    try {
+      const items = await tmkpApi.listItems(annotator, nextPage * BATCH_SIZE, BATCH_SIZE);
+      if (items.length === 0) {
+        setError('No more items to review.');
+        return;
+      }
+      setBatch(items);
+      setBatchIndex(0);
+      setReviewPage(nextPage);
+    } catch {
+      setError('Failed to load more review items');
     } finally {
       setLoading(false);
     }
@@ -739,52 +785,12 @@ export const TmkpApp: React.FC = () => {
 
   const exitReviewMode = () => {
     setReviewMode(false);
-    setReviewItems([]);
-    setReviewIndex(0);
-    setItem(null);
+    setBatch([]);
+    setBatchIndex(0);
     setError(null);
-    loadNext();
+    initRef.current = false;
+    loadBatch();
     loadProgress();
-  };
-
-  const handleReviewPrevious = () => {
-    if (reviewIndex > 0) {
-      const idx = reviewIndex - 1;
-      setReviewIndex(idx);
-      setItem(reviewItems[idx]);
-    }
-  };
-
-  const handleReviewNext = () => {
-    if (reviewIndex < reviewItems.length - 1) {
-      const idx = reviewIndex + 1;
-      setReviewIndex(idx);
-      setItem(reviewItems[idx]);
-    }
-  };
-
-  const handleReviewVerdict = async (verdict: TmkpVerdict, extra?: { correctedPredicate?: string; correctedSubject?: string; correctedObject?: string; notes?: string }) => {
-    if (!item || !annotator) return;
-    try {
-      await tmkpApi.saveVerification({
-        edge_db_id: item.edge_db_id,
-        evidence_id: item.evidence_id,
-        verdict,
-        corrected_predicate: extra?.correctedPredicate,
-        corrected_subject: extra?.correctedSubject,
-        corrected_object: extra?.correctedObject,
-        notes: extra?.notes,
-        annotator,
-      });
-      const updatedItem = { ...item, verdict, verdict_notes: extra?.notes || null };
-      setItem(updatedItem);
-      const updated = [...reviewItems];
-      updated[reviewIndex] = updatedItem;
-      setReviewItems(updated);
-      loadProgress();
-    } catch (err) {
-      console.error('Failed to save verification:', err);
-    }
   };
 
   // ── Admin page ────────────────────────────────────────────────────────────
@@ -792,7 +798,7 @@ export const TmkpApp: React.FC = () => {
     return <TmkpAdminPage />;
   }
 
-  // ── Login ────────────────��────────────────────────────────────────────────
+  // ── Login ─────────────────────────────────────────────────────────────────
   if (!annotator) {
     return (
       <Login onLogin={(name) => {
@@ -802,7 +808,7 @@ export const TmkpApp: React.FC = () => {
     );
   }
 
-  // ── Loading ──────────────���───────────────────────────────────���────────────
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900">
@@ -810,14 +816,17 @@ export const TmkpApp: React.FC = () => {
           <div className="absolute inset-0 rounded-full border-2 border-violet-200 dark:border-violet-900" />
           <div className="absolute inset-0 rounded-full border-2 border-violet-500 border-t-transparent animate-spin" />
         </div>
-        <div className="text-sm font-medium text-slate-500 dark:text-slate-400">Loading edge...</div>
+        <div className="text-sm font-medium text-slate-500 dark:text-slate-400">
+          {reviewMode ? 'Loading review...' : 'Loading batch...'}
+        </div>
       </div>
     );
   }
 
-  // ── Error ───────────────────��─────────────────────────────────────────────
-  if (error) {
-    const allDone = error.includes('verified');
+  // ── Error / batch complete ────────────────────────────────────────────────
+  if (error || batch.length === 0) {
+    const allDone = error?.includes('verified') || false;
+    const batchDone = !error && batch.length === 0;
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900">
         <motion.div
@@ -829,39 +838,33 @@ export const TmkpApp: React.FC = () => {
           <div className="w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center
             bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/30 dark:to-purple-900/30
             ring-4 ring-violet-200/50 dark:ring-violet-800/30">
-            <span className="text-3xl">{allDone ? '🎉' : '📋'}</span>
+            <span className="text-3xl">{allDone || batchDone ? '🎉' : '📋'}</span>
           </div>
           <h2 className="text-2xl font-bold mb-2 text-slate-900 dark:text-white">
-            {allDone ? 'All Verified!' : 'Done!'}
+            {allDone ? 'All Done!' : batchDone ? 'Batch Complete' : 'Notice'}
           </h2>
-          <p className="text-slate-500 dark:text-slate-400 mb-8 text-sm leading-relaxed">{error}</p>
+          <p className="text-slate-500 dark:text-slate-400 mb-8 text-sm leading-relaxed">
+            {error || 'Great work! Load more to continue.'}
+          </p>
           <div className="space-y-2.5">
-            {allDone && (
-              <button
-                onClick={enterReviewMode}
-                className="w-full px-5 py-3 bg-violet-500 hover:bg-violet-600 active:bg-violet-700
-                  text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-violet-500/20
-                  hover:shadow-lg hover:shadow-violet-500/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-violet-500"
-              >
+            {(allDone || batchDone) && (
+              <button onClick={enterReviewMode}
+                className="w-full px-5 py-3 bg-violet-500 hover:bg-violet-600 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-violet-500/20">
                 Review My Verifications
               </button>
             )}
-            <button
-              onClick={() => navigate('/')}
-              className={`w-full px-5 py-3 rounded-xl text-sm font-semibold transition-all
-                focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-violet-500
-                ${allDone
-                  ? 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 shadow-sm'
-                  : 'bg-violet-500 hover:bg-violet-600 text-white shadow-md shadow-violet-500/20'
-                }`}
-            >
+            {!allDone && (
+              <button onClick={() => { initRef.current = false; loadBatch(); loadProgress(); }}
+                className="w-full px-5 py-3 bg-violet-500 hover:bg-violet-600 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-violet-500/20">
+                Load More Items
+              </button>
+            )}
+            <button onClick={() => navigate('/')}
+              className="w-full px-5 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-semibold transition-all shadow-sm">
               Back to Home
             </button>
-            <button
-              onClick={handleLogout}
-              className="w-full px-5 py-2.5 text-sm font-medium text-slate-400 dark:text-slate-500
-                hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-            >
+            <button onClick={handleLogout}
+              className="w-full px-5 py-2.5 text-sm font-medium text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
               Logout
             </button>
           </div>
@@ -872,7 +875,10 @@ export const TmkpApp: React.FC = () => {
 
   if (!item) return null;
 
-  // ── Main UI ─────────────��─────────────────────────────────────────────────
+  const batchAnsweredCount = batch.filter(i => i.verdict).length;
+  const batchAllDone = batchAnsweredCount === batch.length;
+
+  // ── Main UI ───────────────────────────────────────────────────────────────
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900">
       {/* Header */}
@@ -891,22 +897,17 @@ export const TmkpApp: React.FC = () => {
 
           <div className="flex items-center gap-1.5 ml-auto">
             {reviewMode ? (
-              <button
-                onClick={exitReviewMode}
+              <button onClick={exitReviewMode}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
                   bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400
-                  border border-emerald-500/30 rounded-md transition-all duration-150"
-              >
+                  border border-emerald-500/30 rounded-md transition-all duration-150">
                 Back to Queue
               </button>
             ) : (
-              <button
-                onClick={enterReviewMode}
-                title="Browse and edit all your past verifications"
+              <button onClick={enterReviewMode} title="Browse and edit your past verifications"
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
                   bg-slate-500/10 hover:bg-slate-500/20 text-slate-300
-                  border border-slate-500/30 rounded-md transition-all duration-150"
-              >
+                  border border-slate-500/30 rounded-md transition-all duration-150">
                 Review Past
               </button>
             )}
@@ -1009,28 +1010,35 @@ export const TmkpApp: React.FC = () => {
             </div>
           </div>
 
-          {/* Right panel: Verdict */}
+          {/* Right panel: Verdict + Progress strip */}
           <div className="flex-1 h-full overflow-y-auto bg-slate-50 dark:bg-slate-900/50">
             <div className="p-6 space-y-4">
               {/* Review mode banner */}
               {reviewMode && (
-                <div className="flex items-center justify-center gap-2 px-3 py-2.5 bg-amber-50 dark:bg-amber-900/20
+                <div className="flex items-center justify-between px-3 py-2.5 bg-amber-50 dark:bg-amber-900/20
                   border border-amber-200 dark:border-amber-800/50 rounded-xl">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                  <span className="text-xs text-amber-700 dark:text-amber-300 font-semibold">
-                    Review Mode
-                  </span>
-                  <span className="text-xs text-amber-500 dark:text-amber-400 tabular-nums">
-                    {reviewIndex + 1} / {reviewItems.length}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="text-xs text-amber-700 dark:text-amber-300 font-semibold">Review Mode</span>
+                    <span className="text-xs text-amber-500 dark:text-amber-400 tabular-nums">
+                      Page {reviewPage + 1}
+                    </span>
+                  </div>
+                  <button onClick={loadMoreReview}
+                    className="text-xs font-medium text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 transition-colors">
+                    Load Next {BATCH_SIZE} &rarr;
+                  </button>
                 </div>
               )}
+
+              {/* Progress strip */}
+              <ProgressStrip items={batch} currentIndex={batchIndex} onJump={setBatchIndex} />
 
               {/* Navigation */}
               <div className="flex items-center justify-between">
                 <button
-                  onClick={reviewMode ? handleReviewPrevious : handlePrevious}
-                  disabled={reviewMode ? reviewIndex <= 0 : historyIndex <= 0}
+                  onClick={() => setBatchIndex(Math.max(0, batchIndex - 1))}
+                  disabled={batchIndex <= 0}
                   className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold
                     bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700
                     hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed
@@ -1044,24 +1052,15 @@ export const TmkpApp: React.FC = () => {
                 </button>
                 <div className="flex flex-col items-center gap-0.5">
                   <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums font-medium">
-                    #{item.edge_db_id} &middot; ev {item.item_index}/{item.total_items}
+                    {batchIndex + 1} / {batch.length}
                   </span>
-                  {reviewMode ? (
-                    <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-                      {item.verdict ? item.verdict.replace('_', ' ') : 'unverified'}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-slate-400 dark:text-slate-600 tabular-nums">
-                      {historyIndex + 1} of {itemHistory.length} in session
-                    </span>
-                  )}
-                  {fetching && (
-                    <span className="text-[10px] text-violet-500 animate-pulse font-medium">Loading next...</span>
-                  )}
+                  <span className={`text-[10px] font-semibold tabular-nums ${item.verdict ? 'text-emerald-500' : 'text-slate-400'}`}>
+                    {item.verdict ? item.verdict.replace(/_/g, ' ') : 'unanswered'}
+                  </span>
                 </div>
                 <button
-                  onClick={reviewMode ? handleReviewNext : handleNext}
-                  disabled={(reviewMode && reviewIndex >= reviewItems.length - 1) || fetching}
+                  onClick={() => setBatchIndex(Math.min(batch.length - 1, batchIndex + 1))}
+                  disabled={batchIndex >= batch.length - 1}
                   className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold
                     bg-violet-500 hover:bg-violet-600 active:bg-violet-700
                     disabled:opacity-30 disabled:cursor-not-allowed
@@ -1075,13 +1074,28 @@ export const TmkpApp: React.FC = () => {
                 </button>
               </div>
 
+              {/* Batch complete banner */}
+              {batchAllDone && !reviewMode && (
+                <div className="flex items-center justify-between px-4 py-3 bg-emerald-50 dark:bg-emerald-900/20
+                  border border-emerald-200 dark:border-emerald-800/50 rounded-xl">
+                  <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                    Batch complete! All {batch.length} items answered.
+                  </span>
+                  <button onClick={() => { initRef.current = false; loadBatch(); loadProgress(); }}
+                    className="px-3 py-1 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600
+                      text-white rounded-lg transition-colors">
+                    Load Next Batch
+                  </button>
+                </div>
+              )}
+
               <motion.div
                 key={item.evidence_id + '-verdict'}
                 initial={{ opacity: 0, x: 16 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
               >
-                <VerdictPanel item={item} onVerdict={reviewMode ? handleReviewVerdict : handleVerdict} />
+                <VerdictPanel item={item} onVerdict={handleVerdict} />
               </motion.div>
             </div>
           </div>

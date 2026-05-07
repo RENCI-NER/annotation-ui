@@ -143,6 +143,86 @@ def get_next_item(annotator: str = "default", db: Session = Depends(get_db)):
     return _make_annotation_item(edge, chosen_ev, db, annotator, ev_index + 1, len(all_ev_for_edge))
 
 
+# ── Batch of items ──────────────────────────────────────────────────────────
+
+@router.get("/items/batch", response_model=List[schemas.TmkpAnnotationItem])
+def get_batch(annotator: str = "default", limit: int = 100, db: Session = Depends(get_db)):
+    """
+    Return a batch of unverified items for the annotator, up to `limit`.
+    Same dual-annotator priority as /items/next but returns many at once.
+    """
+    annotator = normalize_annotator(annotator)
+
+    my_verified = set(
+        (v.edge_db_id, v.evidence_id) for v in db.query(
+            models.TmkpVerification.edge_db_id,
+            models.TmkpVerification.evidence_id,
+        ).filter(
+            models.TmkpVerification.annotator == annotator,
+            models.TmkpVerification.evidence_id.isnot(None),
+        ).all()
+    )
+
+    all_evidences = db.query(models.TmkpEvidence).all()
+    if not all_evidences:
+        raise HTTPException(status_code=404, detail="No edges in database. Upload a JSONL file first.")
+
+    verification_counts: dict[tuple[int, int], int] = {}
+    for row in db.query(
+        models.TmkpVerification.edge_db_id,
+        models.TmkpVerification.evidence_id,
+        func.count(models.TmkpVerification.id),
+    ).filter(
+        models.TmkpVerification.evidence_id.isnot(None),
+    ).group_by(
+        models.TmkpVerification.edge_db_id,
+        models.TmkpVerification.evidence_id,
+    ).all():
+        verification_counts[(row[0], row[1])] = row[2]
+
+    needs_second = []
+    needs_first = []
+
+    for ev in all_evidences:
+        key = (ev.edge_db_id, ev.id)
+        if key in my_verified:
+            continue
+        count = verification_counts.get(key, 0)
+        if count == 1:
+            needs_second.append(ev)
+        elif count == 0:
+            needs_first.append(ev)
+
+    random.shuffle(needs_second)
+    random.shuffle(needs_first)
+    selected = (needs_second + needs_first)[:limit]
+
+    if not selected and my_verified:
+        raise HTTPException(status_code=404, detail="All available edges verified! Great work.")
+    if not selected:
+        raise HTTPException(status_code=404, detail="No edges available. Upload a JSONL file first.")
+
+    edge_cache: dict[int, models.TmkpEdge] = {}
+    ev_counts_cache: dict[int, list] = {}
+
+    results = []
+    for ev in selected:
+        if ev.edge_db_id not in edge_cache:
+            edge_cache[ev.edge_db_id] = db.query(models.TmkpEdge).filter(
+                models.TmkpEdge.id == ev.edge_db_id
+            ).first()
+            ev_counts_cache[ev.edge_db_id] = db.query(models.TmkpEvidence).filter(
+                models.TmkpEvidence.edge_db_id == ev.edge_db_id
+            ).order_by(models.TmkpEvidence.id).all()
+
+        edge = edge_cache[ev.edge_db_id]
+        all_ev = ev_counts_cache[ev.edge_db_id]
+        ev_index = next((i for i, e in enumerate(all_ev) if e.id == ev.id), 0)
+        results.append(_make_annotation_item(edge, ev, db, annotator, ev_index + 1, len(all_ev)))
+
+    return results
+
+
 # ── Get specific item ───────────────────────────────────────────────────────
 
 @router.get("/items/{evidence_id}", response_model=schemas.TmkpAnnotationItem)

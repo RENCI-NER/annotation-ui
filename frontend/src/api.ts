@@ -5,7 +5,6 @@ const API_BASE = window.location.hostname === 'localhost'
   ? 'http://localhost:8000'  // Development
   : '/api';  // Production
 
-console.log('API_BASE:', API_BASE);
 
 export const adminAuth = async (password: string): Promise<boolean> => {
   try {
@@ -220,9 +219,9 @@ export interface AdminStats {
 // ── TMKP API ────────────────────────────────────────────────────────────────
 
 export const tmkpApi = {
-  getNextItem: async (annotator: string = 'default'): Promise<TmkpAnnotationItem> => {
-    const response = await axios.get(`${API_BASE}/tmkp/items/next`, {
-      params: { annotator },
+  getBatch: async (annotator: string = 'default', limit = 100): Promise<TmkpAnnotationItem[]> => {
+    const response = await axios.get(`${API_BASE}/tmkp/items/batch`, {
+      params: { annotator, limit },
     });
     return response.data;
   },
@@ -234,7 +233,7 @@ export const tmkpApi = {
     return response.data;
   },
 
-  listItems: async (annotator: string = 'default', skip = 0, limit = 50): Promise<TmkpAnnotationItem[]> => {
+  listItems: async (annotator: string = 'default', skip = 0, limit = 100): Promise<TmkpAnnotationItem[]> => {
     const response = await axios.get(`${API_BASE}/tmkp/items`, {
       params: { annotator, skip, limit },
     });
