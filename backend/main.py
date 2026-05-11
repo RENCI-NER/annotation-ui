@@ -83,6 +83,20 @@ def admin_auth(body: dict):
         return {"authenticated": True}
     raise HTTPException(status_code=401, detail="Invalid admin password")
 
+@app.post("/check-name")
+def check_name(body: dict, db: Session = Depends(get_db)):
+    """Check if an annotator name is already taken."""
+    name = body.get("name", "").lower().strip()
+    if not name:
+        return {"taken": False}
+    exists_relate = db.query(models.ArticleAssignment).filter(
+        models.ArticleAssignment.annotator == name
+    ).first() is not None
+    exists_tmkp = db.query(models.TmkpVerification).filter(
+        models.TmkpVerification.annotator == name
+    ).first() is not None
+    return {"taken": exists_relate or exists_tmkp}
+
 @app.get("/")
 def root():
     return {"message": "Relation Annotation API"}
