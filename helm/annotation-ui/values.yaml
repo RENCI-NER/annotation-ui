@@ -6,7 +6,7 @@ backend:
   name: annotation-backend
   replicaCount: 1
   image:
-    repository: ghcr.io/wumirose/annotation-backend
+    repository: ghcr.io/renci-ner/annotation-backend
     tag: latest
     pullPolicy: Always
 
@@ -34,7 +34,7 @@ frontend:
   name: annotation-frontend
   replicaCount: 1
   image:
-    repository: ghcr.io/wumirose/annotation-frontend
+    repository: ghcr.io/renci-ner/annotation-frontend
     tag: latest
     pullPolicy: Always
 
@@ -60,7 +60,7 @@ ingress:
     kubernetes.io/proxy-body-size: 512m
 
   hosts:
-    - host: annotation-test.apps.renci.org
+    - host: annotation.apps.renci.org
       paths:
         - path: /
           pathType: Prefix
@@ -70,8 +70,8 @@ ingress:
               port: 80
   tls:
     - hosts:
-        - annotation-test.apps.renci.org
-      secretName: annotation-test.apps.renci.org-tls
+        - annotation.apps.renci.org
+      secretName: annotation.apps.renci.org-tls
 
 imagePullSecrets: []
 autoscaling:

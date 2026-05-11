@@ -64,7 +64,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
-        "https://annotation-test.apps.renci.org"
+        "https://annotation.apps.renci.org"
     ],
     allow_credentials=True,
     allow_methods=["*"],
