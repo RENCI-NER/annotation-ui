@@ -29,6 +29,10 @@ spec:
         env:
         - name: DATABASE_URL
           value: "sqlite:////app/data/annotations.db"
+        {{- if .Values.backend.adminPassword }}
+        - name: ADMIN_PASSWORD
+          value: {{ .Values.backend.adminPassword | quote }}
+        {{- end }}
       volumes:
       - name: data
         persistentVolumeClaim:

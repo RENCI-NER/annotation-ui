@@ -15,6 +15,15 @@ export const adminAuth = async (password: string): Promise<boolean> => {
   }
 };
 
+export const checkNameTaken = async (name: string): Promise<boolean> => {
+  try {
+    const response = await axios.post(`${API_BASE}/check-name`, { name });
+    return response.data.taken;
+  } catch {
+    return false;
+  }
+};
+
 export const api = {
   createAnnotator: async (name: string) => {
     const response = await axios.post(`${API_BASE}/admin/annotator/${name}`);

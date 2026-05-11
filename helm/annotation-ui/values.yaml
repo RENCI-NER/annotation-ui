@@ -23,6 +23,8 @@ backend:
       memory: "1Gi"
       cpu: "500m"
 
+  adminPassword: ""
+
   persistence:
     enabled: true
     size: 5Gi

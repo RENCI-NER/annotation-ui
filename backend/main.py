@@ -75,10 +75,12 @@ from tmkp_routes import router as tmkp_router
 app.include_router(tmkp_router)
 
 import os
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
 
 @app.post("/admin/auth")
 def admin_auth(body: dict):
+    if not ADMIN_PASSWORD:
+        raise HTTPException(status_code=503, detail="Admin access not configured")
     if body.get("password") == ADMIN_PASSWORD:
         return {"authenticated": True}
     raise HTTPException(status_code=401, detail="Invalid admin password")

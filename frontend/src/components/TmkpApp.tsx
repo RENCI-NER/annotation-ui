@@ -698,12 +698,16 @@ export const TmkpApp: React.FC = () => {
 
   const initRef = React.useRef(false);
   useEffect(() => {
-    if (annotator && !isAdminPage && !initRef.current) {
+    if (isAdminPage) {
+      initRef.current = false;
+      return;
+    }
+    if (annotator && !initRef.current) {
       initRef.current = true;
       loadBatch();
       loadProgress();
     }
-  }, [annotator]);
+  }, [annotator, isAdminPage]);
 
   const handleVerdict = async (verdict: TmkpVerdict, extra?: { correctedPredicate?: string; correctedSubject?: string; correctedObject?: string; notes?: string }) => {
     if (!item || !annotator) return;
@@ -1246,16 +1250,7 @@ const TmkpAdminPage: React.FC = () => {
             </div>
           )}
 
-          {/* Info banner */}
-          <div className="px-4 py-3 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800/50 rounded-xl">
-            <div className="text-sm text-violet-700 dark:text-violet-300 font-medium">Self-serve mode</div>
-            <div className="text-xs text-violet-600/80 dark:text-violet-400/70 mt-0.5">
-              Annotators log in and get random edges automatically. Each (edge, evidence) pair targets 2 reviewers for inter-annotator agreement.
-              Items with 1 reviewer are prioritized for the next annotator.
-            </div>
-          </div>
-
-          {/* Upload */}
+{/* Upload */}
           <div className="p-5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
             <h3 className="text-sm font-semibold text-slate-800 dark:text-white mb-3">Upload TMKP JSONL</h3>
             <input type="file" accept=".jsonl" onChange={handleUpload}
@@ -1263,9 +1258,6 @@ const TmkpAdminPage: React.FC = () => {
             {uploadStatus && (
               <div className="mt-2 text-xs text-slate-500">{uploadStatus}</div>
             )}
-            <p className="text-xs text-slate-400 mt-2">
-              Upload edges from the TMKP dump. You can also use <code className="text-violet-500">python load_tmkp.py</code> for large files with filtering/sampling.
-            </p>
           </div>
 
           {/* Annotators */}
