@@ -119,7 +119,6 @@ class TmkpEdge(Base):
 
     evidences = relationship("TmkpEvidence", back_populates="edge", cascade="all, delete-orphan")
     verifications = relationship("TmkpVerification", back_populates="edge", cascade="all, delete-orphan")
-    assignments = relationship("TmkpAssignment", back_populates="edge", cascade="all, delete-orphan")
 
 
 class TmkpEvidence(Base):
@@ -162,13 +161,10 @@ class TmkpVerification(Base):
     evidence = relationship("TmkpEvidence")
 
 
-class TmkpAssignment(Base):
-    __tablename__ = "tmkp_assignments"
+class TmkpAnnotatorLimit(Base):
+    __tablename__ = "tmkp_annotator_limits"
 
     id = Column(Integer, primary_key=True, index=True)
-    annotator = Column(String, index=True)
-    edge_db_id = Column(Integer, ForeignKey("tmkp_edges.id"))
-    assigned_at = Column(DateTime, default=datetime.utcnow)
-    completed = Column(Boolean, default=False)
-
-    edge = relationship("TmkpEdge", back_populates="assignments")
+    annotator = Column(String, unique=True, index=True)
+    max_items = Column(Integer, default=500)
+    created_at = Column(DateTime, default=datetime.utcnow)

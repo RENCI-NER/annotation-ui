@@ -271,6 +271,19 @@ export const tmkpApi = {
     return response.data;
   },
 
+  setAnnotatorLimit: async (annotator: string, maxItems: number) => {
+    const response = await axios.post(`${API_BASE}/tmkp/admin/set-limit`, {
+      annotator,
+      max_items: maxItems,
+    });
+    return response.data;
+  },
+
+  getAnnotatorLimits: async () => {
+    const response = await axios.get(`${API_BASE}/tmkp/admin/limits`);
+    return response.data;
+  },
+
   exportVerifications: async () => {
     const response = await axios.get(`${API_BASE}/tmkp/admin/export`);
     return response.data;

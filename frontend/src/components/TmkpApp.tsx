@@ -1120,6 +1120,9 @@ const TmkpAdminPage: React.FC = () => {
   const [authError, setAuthError] = useState('');
   const [stats, setStats] = useState<any>(null);
   const [annotators, setAnnotators] = useState<any[]>([]);
+  const [limits, setLimits] = useState<Record<string, number>>({});
+  const [newAnnotator, setNewAnnotator] = useState('');
+  const [newLimit, setNewLimit] = useState(500);
   const [uploadStatus, setUploadStatus] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -1133,10 +1136,19 @@ const TmkpAdminPage: React.FC = () => {
     }
   };
 
+  const loadLimits = () => {
+    tmkpApi.getAnnotatorLimits().then((data: any[]) => {
+      const map: Record<string, number> = {};
+      data.forEach((l: any) => { map[l.annotator] = l.max_items; });
+      setLimits(map);
+    }).catch(console.error);
+  };
+
   useEffect(() => {
     if (!authenticated) return;
     tmkpApi.getAdminStats().then(setStats).catch(console.error);
     tmkpApi.getAnnotators().then(setAnnotators).catch(console.error);
+    loadLimits();
   }, [authenticated]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1278,13 +1290,66 @@ const TmkpAdminPage: React.FC = () => {
                       </div>
                       <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{a.annotator}</span>
                     </div>
-                    <span className="text-xs font-semibold text-slate-500 tabular-nums">
-                      {a.verified_count} verified
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-semibold text-slate-500 tabular-nums">
+                        {a.verified_count}{limits[a.annotator] ? ` / ${limits[a.annotator]}` : ''} verified
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        placeholder="Limit"
+                        defaultValue={limits[a.annotator] || ''}
+                        onBlur={async (e) => {
+                          const val = parseInt(e.target.value);
+                          if (val > 0) {
+                            await tmkpApi.setAnnotatorLimit(a.annotator, val);
+                            loadLimits();
+                          }
+                        }}
+                        className="w-20 px-2 py-1 text-xs bg-white dark:bg-slate-900 border border-slate-200
+                          dark:border-slate-600 rounded-md text-slate-700 dark:text-slate-200 tabular-nums"
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
             )}
+
+            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+              <div className="text-xs font-medium text-slate-500 mb-2">Set limit for new annotator</div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="firstname.lastname"
+                  value={newAnnotator}
+                  onChange={(e) => setNewAnnotator(e.target.value)}
+                  className="flex-1 px-3 py-1.5 text-sm bg-white dark:bg-slate-900 border border-slate-200
+                    dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200
+                    placeholder:text-slate-400"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  value={newLimit}
+                  onChange={(e) => setNewLimit(parseInt(e.target.value) || 500)}
+                  className="w-20 px-2 py-1.5 text-sm bg-white dark:bg-slate-900 border border-slate-200
+                    dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 tabular-nums"
+                />
+                <button
+                  onClick={async () => {
+                    const name = newAnnotator.trim().toLowerCase();
+                    if (!name || newLimit < 1) return;
+                    await tmkpApi.setAnnotatorLimit(name, newLimit);
+                    setNewAnnotator('');
+                    loadLimits();
+                  }}
+                  className="px-3 py-1.5 text-sm font-medium bg-violet-500 hover:bg-violet-600
+                    text-white rounded-lg transition-colors"
+                >
+                  Set
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Export */}

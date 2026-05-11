@@ -150,6 +150,7 @@ def get_batch(annotator: str = "default", limit: int = 100, db: Session = Depend
     """
     Return a batch of unverified items for the annotator, up to `limit`.
     Same dual-annotator priority as /items/next but returns many at once.
+    Respects per-annotator item cap set by admin.
     """
     annotator = normalize_annotator(annotator)
 
@@ -162,6 +163,15 @@ def get_batch(annotator: str = "default", limit: int = 100, db: Session = Depend
             models.TmkpVerification.evidence_id.isnot(None),
         ).all()
     )
+
+    cap = db.query(models.TmkpAnnotatorLimit).filter(
+        models.TmkpAnnotatorLimit.annotator == annotator
+    ).first()
+    if cap:
+        remaining_quota = cap.max_items - len(my_verified)
+        if remaining_quota <= 0:
+            raise HTTPException(status_code=404, detail="You've reached your review limit. Contact admin for more.")
+        limit = min(limit, remaining_quota)
 
     all_evidences = db.query(models.TmkpEvidence).all()
     if not all_evidences:
@@ -497,6 +507,29 @@ def get_tmkp_annotators(db: Session = Depends(get_db)):
         })
     result.sort(key=lambda x: x["verified_count"], reverse=True)
     return result
+
+
+@router.post("/admin/set-limit")
+def set_annotator_limit(body: dict, db: Session = Depends(get_db)):
+    annotator = normalize_annotator(body.get("annotator", ""))
+    max_items = body.get("max_items", 500)
+    if not annotator:
+        raise HTTPException(status_code=400, detail="annotator is required")
+    existing = db.query(models.TmkpAnnotatorLimit).filter(
+        models.TmkpAnnotatorLimit.annotator == annotator
+    ).first()
+    if existing:
+        existing.max_items = max_items
+    else:
+        db.add(models.TmkpAnnotatorLimit(annotator=annotator, max_items=max_items))
+    db.commit()
+    return {"annotator": annotator, "max_items": max_items}
+
+
+@router.get("/admin/limits")
+def get_annotator_limits(db: Session = Depends(get_db)):
+    limits = db.query(models.TmkpAnnotatorLimit).all()
+    return [{"annotator": l.annotator, "max_items": l.max_items} for l in limits]
 
 
 @router.get("/admin/export")
