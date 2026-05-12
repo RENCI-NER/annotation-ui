@@ -231,12 +231,11 @@ class TmkpProgressResponse(BaseModel):
     total_edges: int
     verified_edges: int
     correct_count: int
-    rejected_count: int
     swapped_count: int
     wrong_predicate_count: int
     wrong_subject_count: int
     wrong_object_count: int
-    skipped_count: int
+    combo_count: int
     remaining: int
     completion_percentage: float
 

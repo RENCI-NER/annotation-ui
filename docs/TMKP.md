@@ -4,36 +4,39 @@ Fact-check text-mined knowledge graph edges from the [Text Mining Knowledge Prov
 
 ## Features
 
-- Seven verdict actions: Correct, Swap S/O, Wrong Predicate, Wrong Subject, Wrong Object, Reject, Skip
-- Correction text inputs for wrong subject/object/predicate verdicts
+- Five verdict actions: Correct, Swap S/O, Wrong Predicate, Wrong Subject, Wrong Object
+- Multi-select verdicts: all non-correct verdicts are combinable (e.g. swap_so + wrong_predicate)
+- Correct is exclusive — selecting it auto-submits immediately
+- Optional correction inputs for wrong subject/object/predicate (not required)
 - Supporting text display with highlighted subject/object character spans
 - Entity names resolved via the [Node Normalizer](https://nodenormalization-sri.renci.org) API
 - Batch-based workflow: 100 items per batch with visual progress strip
+- Evidences grouped by edge so you review all evidence for one triple before moving on
 - Dual-annotator targeting for inter-annotator agreement
-- Edge metadata: qualifiers, confidence score, evidence count, publication links
+- Per-annotator item caps (admin-configurable)
 
 ## Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
-| `C` | Correct |
-| `S` | Swap Subject/Object |
-| `W` | Wrong Predicate |
-| `U` | Wrong Subject |
-| `O` | Wrong Object |
-| `R` | Reject |
-| `→` | Skip |
+| `C` | Correct (auto-submits) |
+| `S` | Toggle Swap Subject/Object |
+| `W` | Toggle Wrong Predicate |
+| `U` | Toggle Wrong Subject |
+| `O` | Toggle Wrong Object |
+| `Enter` | Submit selected verdicts |
 
 ## Annotator Workflow
 
 1. Go to `/tmkp-triples` and log in with your first and last name
-2. A batch of 100 items loads automatically
+2. A batch of 100 items loads automatically (grouped by edge)
 3. Review the edge assertion (subject, predicate, object) and any qualifiers
 4. Read the supporting text — subject is highlighted in blue, object in red
-5. Select a verdict; for correction verdicts, enter the corrected value
-6. The progress strip shows answered (colored) vs. unanswered (gray) items; click any dot to jump
-7. After completing a batch, click "Load Next Batch" for more
-8. Switch to Review mode to revisit your previous answers
+5. Click Correct to auto-submit, or toggle one or more other verdicts then double-click or press Enter to submit
+6. Correction fields appear when relevant but are optional
+7. The progress strip shows answered (colored) vs. unanswered (gray) items; click any dot to jump
+8. After completing a batch, click "Load Next Batch" for more
+9. Switch to Review mode to revisit your previous answers
 
 ## Loading Data
 
@@ -97,3 +100,4 @@ python node_norm.py --backfill
 | `tmkp_edges` | Knowledge graph edges (subject/object IDs and names, predicate, qualifiers, confidence) |
 | `tmkp_evidences` | Supporting text snippets with character offsets and publication refs |
 | `tmkp_verifications` | Annotator verdicts per (edge, evidence) pair with optional corrections |
+| `tmkp_annotator_limits` | Per-annotator item caps set by admin |

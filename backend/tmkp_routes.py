@@ -203,8 +203,20 @@ def get_batch(annotator: str = "default", limit: int = 100, db: Session = Depend
         elif count == 0:
             needs_first.append(ev)
 
-    random.shuffle(needs_second)
-    random.shuffle(needs_first)
+    # Group by edge so annotator sees all evidences for one triple together
+    def group_by_edge(evidences):
+        groups: dict[int, list] = {}
+        for ev in evidences:
+            groups.setdefault(ev.edge_db_id, []).append(ev)
+        edge_ids = list(groups.keys())
+        random.shuffle(edge_ids)
+        result = []
+        for eid in edge_ids:
+            result.extend(groups[eid])
+        return result
+
+    needs_second = group_by_edge(needs_second)
+    needs_first = group_by_edge(needs_first)
     selected = (needs_second + needs_first)[:limit]
 
     if not selected and my_verified:
@@ -422,13 +434,16 @@ def get_progress(annotator: str = "default", db: Session = Depends(get_db)):
     ).all()
 
     counts = {
-        "correct": 0, "reject": 0, "swap_so": 0,
+        "correct": 0, "swap_so": 0,
         "wrong_predicate": 0, "wrong_subject": 0, "wrong_object": 0,
-        "skip": 0,
+        "combo": 0,
     }
     for v in verifications:
-        if v.verdict in counts:
-            counts[v.verdict] += 1
+        parts = v.verdict.split(",") if v.verdict else []
+        if len(parts) > 1:
+            counts["combo"] += 1
+        elif len(parts) == 1 and parts[0] in counts:
+            counts[parts[0]] += 1
 
     verified = len(verifications)
     total_evidences = db.query(models.TmkpEvidence).count()
@@ -443,12 +458,11 @@ def get_progress(annotator: str = "default", db: Session = Depends(get_db)):
         total_edges=verified + remaining,
         verified_edges=verified,
         correct_count=counts["correct"],
-        rejected_count=counts["reject"],
         swapped_count=counts["swap_so"],
         wrong_predicate_count=counts["wrong_predicate"],
         wrong_subject_count=counts["wrong_subject"],
         wrong_object_count=counts["wrong_object"],
-        skipped_count=counts["skip"],
+        combo_count=counts["combo"],
         remaining=remaining,
         completion_percentage=round(pct, 1),
     )

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { checkNameTaken } from '../api';
 
 interface Props {
   onLogin: (annotator: string) => void;
@@ -9,9 +8,6 @@ export const Login: React.FC<Props> = ({ onLogin }) => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [middleInitial, setMiddleInitial] = useState('');
-  const [showMiddle, setShowMiddle] = useState(false);
-  const [error, setError] = useState('');
-  const [checking, setChecking] = useState(false);
 
   const buildName = () => {
     const first = firstName.trim().toLowerCase();
@@ -21,39 +17,15 @@ export const Login: React.FC<Props> = ({ onLogin }) => {
     return `${first}.${last}`;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const first = firstName.trim().toLowerCase();
     const last = lastName.trim().toLowerCase();
-    if (!first || !last) {
-      setError('Please enter both first and last name');
-      return;
-    }
-    if (first.length < 2 || last.length < 2) {
-      setError('Names must be at least 2 characters');
-      return;
-    }
-
-    const name = buildName();
-    setChecking(true);
-    const taken = await checkNameTaken(name);
-    setChecking(false);
-
-    if (taken) {
-      if (!showMiddle) {
-        setShowMiddle(true);
-        setError('That name is already taken. Add your middle initial to distinguish yourself.');
-        return;
-      }
-      setError('That name is still taken. Try a different middle initial.');
-      return;
-    }
-
-    onLogin(name);
+    if (!first || !last || first.length < 2 || last.length < 2) return;
+    onLogin(buildName());
   };
 
-  const isValid = firstName.trim().length >= 2 && lastName.trim().length >= 2
-    && (!showMiddle || middleInitial.trim().length >= 1);
+  const isValid = firstName.trim().length >= 2 && lastName.trim().length >= 2;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
@@ -82,7 +54,7 @@ export const Login: React.FC<Props> = ({ onLogin }) => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className={`grid ${showMiddle ? 'grid-cols-[1fr_auto_1fr]' : 'grid-cols-2'} gap-3`}>
+            <div className="grid grid-cols-[1fr_auto_1fr] gap-3">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                   First Name
@@ -90,7 +62,7 @@ export const Login: React.FC<Props> = ({ onLogin }) => {
                 <input
                   type="text"
                   value={firstName}
-                  onChange={(e) => { setFirstName(e.target.value); setError(''); }}
+                  onChange={(e) => setFirstName(e.target.value)}
                   placeholder="Jane"
                   className="w-full px-4 py-3
                     border-2 border-slate-200 dark:border-slate-600
@@ -103,29 +75,26 @@ export const Login: React.FC<Props> = ({ onLogin }) => {
                   autoFocus
                 />
               </div>
-              {showMiddle && (
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                    M.I.
-                  </label>
-                  <input
-                    type="text"
-                    value={middleInitial}
-                    onChange={(e) => { setMiddleInitial(e.target.value.slice(0, 1)); setError(''); }}
-                    placeholder="M"
-                    maxLength={1}
-                    className="w-14 px-3 py-3 text-center
-                      border-2 border-slate-200 dark:border-slate-600
-                      bg-white dark:bg-slate-700
-                      text-slate-900 dark:text-white
-                      rounded-xl
-                      focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent
-                      placeholder:text-slate-400 dark:placeholder:text-slate-500
-                      transition-all duration-200"
-                    autoFocus
-                  />
-                </div>
-              )}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  M.I.
+                </label>
+                <input
+                  type="text"
+                  value={middleInitial}
+                  onChange={(e) => setMiddleInitial(e.target.value.slice(0, 1))}
+                  placeholder="—"
+                  maxLength={1}
+                  className="w-14 px-3 py-3 text-center
+                    border-2 border-slate-200 dark:border-slate-600
+                    bg-white dark:bg-slate-700
+                    text-slate-900 dark:text-white
+                    rounded-xl
+                    focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent
+                    placeholder:text-slate-400 dark:placeholder:text-slate-500
+                    transition-all duration-200"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                   Last Name
@@ -133,7 +102,7 @@ export const Login: React.FC<Props> = ({ onLogin }) => {
                 <input
                   type="text"
                   value={lastName}
-                  onChange={(e) => { setLastName(e.target.value); setError(''); }}
+                  onChange={(e) => setLastName(e.target.value)}
                   placeholder="Doe"
                   className="w-full px-4 py-3
                     border-2 border-slate-200 dark:border-slate-600
@@ -147,10 +116,6 @@ export const Login: React.FC<Props> = ({ onLogin }) => {
               </div>
             </div>
 
-            {error && (
-              <div className="text-xs text-red-500 font-medium">{error}</div>
-            )}
-
             {isValid && (
               <div className="text-xs text-slate-400 text-center">
                 You will be logged in as <span className="font-semibold text-teal-600 dark:text-teal-400">{buildName()}</span>
@@ -159,7 +124,7 @@ export const Login: React.FC<Props> = ({ onLogin }) => {
 
             <button
               type="submit"
-              disabled={!isValid || checking}
+              disabled={!isValid}
               className="w-full py-3.5
                 bg-gradient-to-r from-teal-500 to-cyan-600
                 hover:from-teal-600 hover:to-cyan-700
@@ -171,7 +136,7 @@ export const Login: React.FC<Props> = ({ onLogin }) => {
                 transition-all duration-200
                 disabled:cursor-not-allowed"
             >
-              {checking ? 'Checking...' : isValid ? 'Start Annotating' : 'Enter Your Name'}
+              {isValid ? 'Start Annotating' : 'Enter Your Name'}
             </button>
           </form>
 

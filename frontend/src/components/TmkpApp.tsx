@@ -49,8 +49,6 @@ const VERDICT_CONFIG: Record<TmkpVerdict, { label: string; icon: string; color: 
   wrong_predicate: { label: 'Wrong Pred.',     icon: '✎',  color: 'text-amber-600 dark:text-amber-400',  hoverColor: 'hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:border-amber-300 dark:hover:border-amber-700',     activeColor: 'bg-amber-500 text-white border-amber-500',  shortcut: 'W' },
   wrong_subject:   { label: 'Wrong Subj.',     icon: '⚑',  color: 'text-cyan-600 dark:text-cyan-400',    hoverColor: 'hover:bg-cyan-50 dark:hover:bg-cyan-900/30 hover:border-cyan-300 dark:hover:border-cyan-700',         activeColor: 'bg-cyan-500 text-white border-cyan-500',    shortcut: 'U' },
   wrong_object:    { label: 'Wrong Obj.',      icon: '⚐',  color: 'text-orange-600 dark:text-orange-400', hoverColor: 'hover:bg-orange-50 dark:hover:bg-orange-900/30 hover:border-orange-300 dark:hover:border-orange-700', activeColor: 'bg-orange-500 text-white border-orange-500', shortcut: 'O' },
-  reject:          { label: 'Reject',          icon: '✕',  color: 'text-red-600 dark:text-red-400',      hoverColor: 'hover:bg-red-50 dark:hover:bg-red-900/30 hover:border-red-300 dark:hover:border-red-700',             activeColor: 'bg-red-500 text-white border-red-500',      shortcut: 'R' },
-  skip:            { label: 'Skip',            icon: '→',  color: 'text-slate-500 dark:text-slate-400',  hoverColor: 'hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:border-slate-300 dark:hover:border-slate-600',    activeColor: 'bg-slate-500 text-white border-slate-500',  shortcut: '→' },
 };
 
 // ── Supporting Text View (single evidence) ─────────────��───────────────────
@@ -83,11 +81,6 @@ const SupportingTextView: React.FC<{ item: TmkpAnnotationItem }> = ({ item }) =>
     segments.push(<span key="end">{text.slice(pos)}</span>);
   }
 
-  const confPct = ev.extraction_confidence * 100;
-  const confColor = confPct >= 80 ? 'text-emerald-600 dark:text-emerald-400'
-    : confPct >= 50 ? 'text-amber-600 dark:text-amber-400'
-    : 'text-red-600 dark:text-red-400';
-
   return (
     <div className="rounded-xl border border-slate-200 dark:border-slate-700
       shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden">
@@ -112,9 +105,6 @@ const SupportingTextView: React.FC<{ item: TmkpAnnotationItem }> = ({ item }) =>
           )}
         </div>
         <div className="flex items-center gap-3">
-          <span className={`text-xs font-mono font-semibold ${confColor}`}>
-            {confPct.toFixed(0)}%
-          </span>
           {ev.publication && (
             <a
               href={`https://www.ncbi.nlm.nih.gov/pmc/articles/${ev.publication}/`}
@@ -142,19 +132,7 @@ const SupportingTextView: React.FC<{ item: TmkpAnnotationItem }> = ({ item }) =>
   );
 };
 
-// ── Edge Card ───────────────���───────────────────────────────────────────────
-const ConfidenceBadge: React.FC<{ score: number }> = ({ score }) => {
-  const pct = score * 100;
-  const color = pct >= 80 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-800' :
-                pct >= 50 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 ring-amber-200 dark:ring-amber-800' :
-                'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 ring-red-200 dark:ring-red-800';
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums ring-1 ${color}`}>
-      {pct.toFixed(0)}%
-    </span>
-  );
-};
-
+// ── Edge Card ───────────────────────────────────────────────────────────────
 const EdgeCard: React.FC<{ item: TmkpAnnotationItem }> = ({ item }) => (
   <div className="rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden
     bg-gradient-to-b from-white to-slate-50/50 dark:from-slate-800 dark:to-slate-800/50">
@@ -198,6 +176,22 @@ const EdgeCard: React.FC<{ item: TmkpAnnotationItem }> = ({ item }) => (
               via {formatPredicate(item.qualified_predicate)}
             </div>
           )}
+          {(item.object_direction_qualifier || item.object_aspect_qualifier) && (
+            <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
+              {item.object_direction_qualifier && (
+                <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300
+                  text-[10px] font-medium ring-1 ring-amber-200/60 dark:ring-amber-800/40">
+                  {formatQualifier(item.object_direction_qualifier)}
+                </span>
+              )}
+              {item.object_aspect_qualifier && (
+                <span className="px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300
+                  text-[10px] font-medium ring-1 ring-purple-200/60 dark:ring-purple-800/40">
+                  {formatQualifier(item.object_aspect_qualifier)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Object */}
@@ -227,23 +221,6 @@ const EdgeCard: React.FC<{ item: TmkpAnnotationItem }> = ({ item }) => (
     {/* Meta bar */}
     <div className="px-5 py-2.5 bg-slate-50/80 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-700/60
       flex items-center gap-2 flex-wrap">
-      <ConfidenceBadge score={item.confidence_score} />
-      <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
-        {item.evidence_count} evidence{item.evidence_count !== 1 ? 's' : ''}
-      </span>
-      <span className="flex-1" />
-      {item.object_direction_qualifier && (
-        <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300
-          text-[11px] font-medium ring-1 ring-amber-200/60 dark:ring-amber-800/40">
-          {formatQualifier(item.object_direction_qualifier)}
-        </span>
-      )}
-      {item.object_aspect_qualifier && (
-        <span className="px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300
-          text-[11px] font-medium ring-1 ring-purple-200/60 dark:ring-purple-800/40">
-          {formatQualifier(item.object_aspect_qualifier)}
-        </span>
-      )}
       {item.category && (
         <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400
           text-[11px] font-medium">
@@ -257,12 +234,14 @@ const EdgeCard: React.FC<{ item: TmkpAnnotationItem }> = ({ item }) => (
 // ── Verdict Panel ──────────────────��────────────────────────────────────────
 const VerdictPanel: React.FC<{
   item: TmkpAnnotationItem;
-  onVerdict: (verdict: TmkpVerdict, extra?: { correctedPredicate?: string; correctedSubject?: string; correctedObject?: string; notes?: string }) => void;
+  onVerdict: (verdict: string, extra?: { correctedPredicate?: string; correctedSubject?: string; correctedObject?: string; notes?: string }) => void;
 }> = ({ item, onVerdict }) => {
-  const [selectedVerdict, setSelectedVerdict] = useState<TmkpVerdict | null>(item.verdict || null);
-  const [showPredicatePicker, setShowPredicatePicker] = useState(item.verdict === 'wrong_predicate');
-  const [showSubjectInput, setShowSubjectInput] = useState(item.verdict === 'wrong_subject');
-  const [showObjectInput, setShowObjectInput] = useState(item.verdict === 'wrong_object');
+  const parseVerdicts = (v: string | null): Set<TmkpVerdict> => {
+    if (!v) return new Set();
+    return new Set(v.split(',').filter(Boolean) as TmkpVerdict[]);
+  };
+
+  const [selected, setSelected] = useState<Set<TmkpVerdict>>(parseVerdicts(item.verdict));
   const [correctedPredicate, setCorrectedPredicate] = useState('');
   const [correctedSubject, setCorrectedSubject] = useState('');
   const [correctedObject, setCorrectedObject] = useState('');
@@ -274,10 +253,7 @@ const VerdictPanel: React.FC<{
   const filteredPredicates = useSmartPredicateSearch(predicates, searchTerm);
 
   useEffect(() => {
-    setSelectedVerdict(item.verdict || null);
-    setShowPredicatePicker(item.verdict === 'wrong_predicate');
-    setShowSubjectInput(item.verdict === 'wrong_subject');
-    setShowObjectInput(item.verdict === 'wrong_object');
+    setSelected(parseVerdicts(item.verdict));
     setCorrectedPredicate('');
     setCorrectedSubject('');
     setCorrectedObject('');
@@ -286,38 +262,63 @@ const VerdictPanel: React.FC<{
     setShowSaved(false);
   }, [item.evidence_id]);
 
-  const needsConfirmation = (v: TmkpVerdict) =>
-    v === 'reject' || v === 'skip' || v === 'wrong_predicate' || v === 'wrong_subject' || v === 'wrong_object';
+  const onVerdictRef = React.useRef(onVerdict);
+  onVerdictRef.current = onVerdict;
+  const selectedRef = React.useRef(selected);
+  selectedRef.current = selected;
+  const correctedPredicateRef = React.useRef(correctedPredicate);
+  correctedPredicateRef.current = correctedPredicate;
+  const correctedSubjectRef = React.useRef(correctedSubject);
+  correctedSubjectRef.current = correctedSubject;
+  const correctedObjectRef = React.useRef(correctedObject);
+  correctedObjectRef.current = correctedObject;
+  const notesRef = React.useRef(notes);
+  notesRef.current = notes;
 
-  const handleVerdictClick = (verdict: TmkpVerdict) => {
-    setSelectedVerdict(verdict);
-    setShowPredicatePicker(verdict === 'wrong_predicate');
-    setShowSubjectInput(verdict === 'wrong_subject');
-    setShowObjectInput(verdict === 'wrong_object');
-    if (!needsConfirmation(verdict)) {
-      submitVerdict(verdict);
-    }
-  };
-
-  const submitVerdict = (verdict: TmkpVerdict, extra?: { correctedPredicate?: string; correctedSubject?: string; correctedObject?: string }) => {
-    onVerdict(verdict, { ...extra, notes: notes || undefined });
+  const doSubmit = React.useCallback((sel: Set<TmkpVerdict>) => {
+    if (sel.size === 0) return;
+    const verdictStr = Array.from(sel).join(',');
+    onVerdictRef.current(verdictStr, {
+      correctedPredicate: sel.has('wrong_predicate') ? correctedPredicateRef.current || undefined : undefined,
+      correctedSubject: sel.has('wrong_subject') ? correctedSubjectRef.current.trim() || undefined : undefined,
+      correctedObject: sel.has('wrong_object') ? correctedObjectRef.current.trim() || undefined : undefined,
+      notes: notesRef.current || undefined,
+    });
     setShowSaved(true);
     setTimeout(() => setShowSaved(false), 1200);
-  };
+  }, []);
+
+  const pendingSubmitRef = React.useRef(false);
+  const toggleVerdict = React.useCallback((verdict: TmkpVerdict) => {
+    setSelected(prev => {
+      if (verdict === 'correct') {
+        if (prev.has('correct')) return new Set();
+        pendingSubmitRef.current = true;
+        return new Set<TmkpVerdict>(['correct']);
+      }
+      const next = new Set(prev);
+      next.delete('correct');
+      if (next.has(verdict)) next.delete(verdict);
+      else next.add(verdict);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (pendingSubmitRef.current && selected.has('correct')) {
+      pendingSubmitRef.current = false;
+      doSubmit(selected);
+    }
+  }, [selected, doSubmit]);
+
+  const handleClickSubmit = React.useCallback(() => {
+    const sel = selectedRef.current;
+    if (sel.size === 0 || sel.has('correct')) return;
+    doSubmit(sel);
+  }, [doSubmit]);
 
   const handlePredicateSelect = (predicateId: string) => {
     setCorrectedPredicate(predicateId);
-    submitVerdict('wrong_predicate', { correctedPredicate: predicateId });
-  };
-
-  const handleSubjectSubmit = () => {
-    if (!correctedSubject.trim()) return;
-    submitVerdict('wrong_subject', { correctedSubject: correctedSubject.trim() });
-  };
-
-  const handleObjectSubmit = () => {
-    if (!correctedObject.trim()) return;
-    submitVerdict('wrong_object', { correctedObject: correctedObject.trim() });
   };
 
   useEffect(() => {
@@ -325,17 +326,16 @@ const VerdictPanel: React.FC<{
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
 
-      if (e.key === 'c' || e.key === 'C') { e.preventDefault(); handleVerdictClick('correct'); }
-      else if (e.key === 's' || e.key === 'S') { e.preventDefault(); handleVerdictClick('swap_so'); }
-      else if (e.key === 'w' || e.key === 'W') { e.preventDefault(); handleVerdictClick('wrong_predicate'); }
-      else if (e.key === 'u' || e.key === 'U') { e.preventDefault(); handleVerdictClick('wrong_subject'); }
-      else if (e.key === 'o' || e.key === 'O') { e.preventDefault(); handleVerdictClick('wrong_object'); }
-      else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); handleVerdictClick('reject'); }
-      else if (e.key === 'ArrowRight') { e.preventDefault(); handleVerdictClick('skip'); }
+      if (e.key === 'c' || e.key === 'C') { e.preventDefault(); toggleVerdict('correct'); }
+      else if (e.key === 's' || e.key === 'S') { e.preventDefault(); toggleVerdict('swap_so'); }
+      else if (e.key === 'w' || e.key === 'W') { e.preventDefault(); toggleVerdict('wrong_predicate'); }
+      else if (e.key === 'u' || e.key === 'U') { e.preventDefault(); toggleVerdict('wrong_subject'); }
+      else if (e.key === 'o' || e.key === 'O') { e.preventDefault(); toggleVerdict('wrong_object'); }
+      else if (e.key === 'Enter') { e.preventDefault(); doSubmit(selectedRef.current); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [item.evidence_id, notes]);
+  }, [doSubmit, toggleVerdict]);
 
   return (
     <div className="rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden
@@ -364,13 +364,13 @@ const VerdictPanel: React.FC<{
 
       {/* Verdict buttons */}
       <div className="px-5 py-5">
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-5 gap-2">
           {(Object.entries(VERDICT_CONFIG) as [TmkpVerdict, typeof VERDICT_CONFIG['correct']][]).map(([key, cfg]) => {
-            const isActive = selectedVerdict === key;
+            const isActive = selected.has(key);
             return (
               <button
                 key={key}
-                onClick={() => handleVerdictClick(key)}
+                onClick={() => toggleVerdict(key)}
                 className={`group flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border-2
                   transition-all duration-150 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-violet-500
                   ${isActive
@@ -390,7 +390,7 @@ const VerdictPanel: React.FC<{
 
         {/* Predicate correction picker */}
         <AnimatePresence>
-          {showPredicatePicker && (
+          {selected.has('wrong_predicate') && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
@@ -401,7 +401,7 @@ const VerdictPanel: React.FC<{
               <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-amber-500">&#9888;</span>
-                  <span className="text-xs font-bold text-amber-700 dark:text-amber-300">Select the correct predicate</span>
+                  <span className="text-xs font-bold text-amber-700 dark:text-amber-300">Correct predicate <span className="font-normal text-slate-400">(optional)</span></span>
                 </div>
                 <div className="relative">
                   <input
@@ -465,7 +465,7 @@ const VerdictPanel: React.FC<{
 
         {/* Wrong subject input */}
         <AnimatePresence>
-          {showSubjectInput && (
+          {selected.has('wrong_subject') && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
@@ -476,7 +476,7 @@ const VerdictPanel: React.FC<{
               <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-cyan-500">⚑</span>
-                  <span className="text-xs font-bold text-cyan-700 dark:text-cyan-300">What should the subject be?</span>
+                  <span className="text-xs font-bold text-cyan-700 dark:text-cyan-300">Correct subject <span className="font-normal text-slate-400">(optional)</span></span>
                 </div>
                 <div className="text-xs text-slate-400 mb-2">
                   Current: <span className="font-semibold text-slate-600 dark:text-slate-300">{item.subject_name || item.subject_id}</span>
@@ -485,23 +485,11 @@ const VerdictPanel: React.FC<{
                   type="text"
                   value={correctedSubject}
                   onChange={(e) => setCorrectedSubject(e.target.value)}
-                  placeholder="Enter correct subject..."
-                  autoFocus
-                  onKeyDown={(e) => e.key === 'Enter' && handleSubjectSubmit()}
+                  placeholder="Leave blank if unsure..."
                   className="w-full px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600
                     dark:bg-slate-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400
                     focus:border-cyan-400 placeholder:text-slate-400"
                 />
-                <button
-                  onClick={handleSubjectSubmit}
-                  disabled={!correctedSubject.trim()}
-                  className="mt-3 w-full px-4 py-2.5 text-sm font-semibold bg-cyan-500 hover:bg-cyan-600
-                    active:bg-cyan-700 text-white rounded-lg transition-colors shadow-sm
-                    disabled:opacity-40 disabled:cursor-not-allowed
-                    focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-cyan-500"
-                >
-                  Submit Correction
-                </button>
               </div>
             </motion.div>
           )}
@@ -509,7 +497,7 @@ const VerdictPanel: React.FC<{
 
         {/* Wrong object input */}
         <AnimatePresence>
-          {showObjectInput && (
+          {selected.has('wrong_object') && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
@@ -520,7 +508,7 @@ const VerdictPanel: React.FC<{
               <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-orange-500">⚐</span>
-                  <span className="text-xs font-bold text-orange-700 dark:text-orange-300">What should the object be?</span>
+                  <span className="text-xs font-bold text-orange-700 dark:text-orange-300">Correct object <span className="font-normal text-slate-400">(optional)</span></span>
                 </div>
                 <div className="text-xs text-slate-400 mb-2">
                   Current: <span className="font-semibold text-slate-600 dark:text-slate-300">{item.object_name || item.object_id}</span>
@@ -529,31 +517,19 @@ const VerdictPanel: React.FC<{
                   type="text"
                   value={correctedObject}
                   onChange={(e) => setCorrectedObject(e.target.value)}
-                  placeholder="Enter correct object..."
-                  autoFocus
-                  onKeyDown={(e) => e.key === 'Enter' && handleObjectSubmit()}
+                  placeholder="Leave blank if unsure..."
                   className="w-full px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600
                     dark:bg-slate-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400
                     focus:border-orange-400 placeholder:text-slate-400"
                 />
-                <button
-                  onClick={handleObjectSubmit}
-                  disabled={!correctedObject.trim()}
-                  className="mt-3 w-full px-4 py-2.5 text-sm font-semibold bg-orange-500 hover:bg-orange-600
-                    active:bg-orange-700 text-white rounded-lg transition-colors shadow-sm
-                    disabled:opacity-40 disabled:cursor-not-allowed
-                    focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-orange-500"
-                >
-                  Submit Correction
-                </button>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Notes — shown for reject/skip */}
+        {/* Notes */}
         <AnimatePresence>
-          {(selectedVerdict === 'reject' || selectedVerdict === 'skip') && (
+          {selected.size > 0 && !selected.has('correct') && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
@@ -568,21 +544,37 @@ const VerdictPanel: React.FC<{
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  autoFocus
                   className="w-full p-3 text-sm border border-slate-300 dark:border-slate-600
                     dark:bg-slate-700 dark:text-white rounded-lg focus:outline-none focus:ring-2
                     focus:ring-violet-400 focus:border-violet-400 placeholder:text-slate-400 resize-none"
                   rows={2}
-                  placeholder={selectedVerdict === 'reject' ? 'Why reject this edge?' : 'Why skip?'}
+                  placeholder="Additional notes..."
                 />
-                <button
-                  onClick={() => submitVerdict(selectedVerdict)}
-                  className="mt-3 w-full px-4 py-2.5 text-sm font-semibold bg-violet-500 hover:bg-violet-600
-                    active:bg-violet-700 text-white rounded-lg transition-colors shadow-sm
-                    focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-violet-500"
-                >
-                  Submit {selectedVerdict === 'reject' ? 'Rejection' : 'Skip'}
-                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Submit button for non-correct verdicts */}
+        <AnimatePresence>
+          {selected.size > 0 && !selected.has('correct') && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="overflow-hidden"
+            >
+              <button
+                onClick={handleClickSubmit}
+                className="mt-4 w-full px-4 py-2.5 text-sm font-semibold bg-violet-500 hover:bg-violet-600
+                  active:bg-violet-700 text-white rounded-lg transition-colors shadow-sm
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-violet-500"
+              >
+                Submit ({Array.from(selected).map(v => v.replace(/_/g, ' ')).join(' + ')})
+              </button>
+              <div className="mt-1.5 text-center text-[10px] text-slate-400">
+                or press <kbd className="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono font-semibold text-slate-500 dark:text-slate-400">Enter</kbd>
               </div>
             </motion.div>
           )}
@@ -609,16 +601,17 @@ const VerdictPanel: React.FC<{
 // ── Item Progress Strip ──────────────────────────────────────────────────────
 const BATCH_SIZE = 100;
 
-const verdictDotColor = (verdict: TmkpVerdict | null): string => {
+const verdictDotColor = (verdict: string | null): string => {
   if (!verdict) return 'bg-slate-300 dark:bg-slate-600';
-  switch (verdict) {
+  const first = verdict.split(',')[0] as TmkpVerdict;
+  const hasMultiple = verdict.includes(',');
+  if (hasMultiple) return 'bg-violet-400';
+  switch (first) {
     case 'correct': return 'bg-emerald-400';
     case 'swap_so': return 'bg-blue-400';
     case 'wrong_predicate': return 'bg-amber-400';
     case 'wrong_subject': return 'bg-cyan-400';
     case 'wrong_object': return 'bg-orange-400';
-    case 'reject': return 'bg-red-400';
-    case 'skip': return 'bg-slate-400';
     default: return 'bg-slate-300 dark:bg-slate-600';
   }
 };
@@ -670,8 +663,25 @@ export const TmkpApp: React.FC = () => {
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewPage, setReviewPage] = useState(0);
 
+  const batchRef = React.useRef(batch);
+  batchRef.current = batch;
+
+  useEffect(() => {
+    if (annotator && batch.length > 0) {
+      try { localStorage.setItem(`tmkp_batch_${annotator}`, JSON.stringify(batch)); } catch {}
+    }
+  }, [batch, annotator]);
+
+  useEffect(() => {
+    if (annotator) {
+      try { localStorage.setItem(`tmkp_batch_idx_${annotator}`, String(batchIndex)); } catch {}
+    }
+  }, [batchIndex, annotator]);
+
   const isAdminPage = location.pathname.endsWith('/admin');
   const item = batch[batchIndex] || null;
+  const itemRef = React.useRef(item);
+  itemRef.current = item;
 
   const loadBatch = useCallback(async () => {
     if (!annotator) return;
@@ -704,17 +714,33 @@ export const TmkpApp: React.FC = () => {
     }
     if (annotator && !initRef.current) {
       initRef.current = true;
+      try {
+        const stored = localStorage.getItem(`tmkp_batch_${annotator}`);
+        const storedIdx = localStorage.getItem(`tmkp_batch_idx_${annotator}`);
+        if (stored) {
+          const items = JSON.parse(stored) as TmkpAnnotationItem[];
+          if (items.length > 0) {
+            setBatch(items);
+            setBatchIndex(storedIdx ? parseInt(storedIdx, 10) : 0);
+            setLoading(false);
+            loadProgress();
+            return;
+          }
+        }
+      } catch {}
       loadBatch();
       loadProgress();
     }
   }, [annotator, isAdminPage]);
 
-  const handleVerdict = async (verdict: TmkpVerdict, extra?: { correctedPredicate?: string; correctedSubject?: string; correctedObject?: string; notes?: string }) => {
-    if (!item || !annotator) return;
+  const handleVerdict = useCallback(async (verdict: string, extra?: { correctedPredicate?: string; correctedSubject?: string; correctedObject?: string; notes?: string }) => {
+    const currentItem = itemRef.current;
+    if (!currentItem || !annotator) return;
+    const evidenceId = currentItem.evidence_id;
     try {
       await tmkpApi.saveVerification({
-        edge_db_id: item.edge_db_id,
-        evidence_id: item.evidence_id,
+        edge_db_id: currentItem.edge_db_id,
+        evidence_id: evidenceId,
         verdict,
         corrected_predicate: extra?.correctedPredicate,
         corrected_subject: extra?.correctedSubject,
@@ -722,28 +748,24 @@ export const TmkpApp: React.FC = () => {
         notes: extra?.notes,
         annotator,
       });
-      const updated = [...batch];
-      updated[batchIndex] = { ...item, verdict, verdict_notes: extra?.notes || null };
-      setBatch(updated);
+      setBatch(prev => prev.map(it =>
+        it.evidence_id === evidenceId ? { ...it, verdict, verdict_notes: extra?.notes || null } : it
+      ));
+      setTimeout(() => {
+        const current = batchRef.current;
+        setBatchIndex(currIdx => {
+          const nextUnanswered = current.findIndex((it, i) => i > currIdx && !it.verdict);
+          if (nextUnanswered !== -1) return nextUnanswered;
+          const firstUnanswered = current.findIndex(it => !it.verdict);
+          if (firstUnanswered !== -1) return firstUnanswered;
+          return currIdx;
+        });
+      }, 400);
       loadProgress();
-
-      if (verdict !== 'wrong_predicate' && verdict !== 'wrong_subject' && verdict !== 'wrong_object') {
-        setTimeout(() => {
-          const nextUnanswered = updated.findIndex((it, i) => i > batchIndex && !it.verdict);
-          if (nextUnanswered !== -1) {
-            setBatchIndex(nextUnanswered);
-          } else {
-            const firstUnanswered = updated.findIndex(it => !it.verdict);
-            if (firstUnanswered !== -1) {
-              setBatchIndex(firstUnanswered);
-            }
-          }
-        }, 500);
-      }
-    } catch {
-      // silently fail
+    } catch (err: any) {
+      console.error('Failed to save verification:', err?.response?.data || err);
     }
-  };
+  }, [annotator, loadProgress]);
 
   const handleLogout = () => {
     localStorage.removeItem('tmkp_annotator');
@@ -949,8 +971,6 @@ export const TmkpApp: React.FC = () => {
                   { label: 'Pred.', value: progress.wrong_predicate_count, dotColor: 'bg-amber-400' },
                   { label: 'Subj.', value: progress.wrong_subject_count, dotColor: 'bg-cyan-400' },
                   { label: 'Obj.', value: progress.wrong_object_count, dotColor: 'bg-orange-400' },
-                  { label: 'Rejected', value: progress.rejected_count, dotColor: 'bg-red-400' },
-                  { label: 'Skipped', value: progress.skipped_count, dotColor: 'bg-slate-400' },
                   { label: 'Left', value: progress.remaining, dotColor: 'bg-slate-300 dark:bg-slate-600' },
                 ].map(({ label, value, dotColor }) => (
                   <div key={label} className="flex items-center gap-1 px-2 py-1 rounded-md
@@ -1249,9 +1269,9 @@ const TmkpAdminPage: React.FC = () => {
               {[
                 { label: 'Total Edges', value: stats.total_edges, color: 'text-slate-700 dark:text-white' },
                 { label: 'Total Items', value: stats.total_items, color: 'text-slate-600 dark:text-slate-300' },
-                { label: 'Verified (1+)', value: stats.total_verified, color: 'text-violet-600 dark:text-violet-400' },
-                { label: 'Dual-Reviewed', value: stats.dual_reviewed, color: 'text-emerald-600 dark:text-emerald-400' },
+                { label: 'Verified once', value: stats.total_verified, color: 'text-violet-600 dark:text-violet-400' },
                 { label: 'Needs 2nd', value: stats.needs_second, color: 'text-amber-600 dark:text-amber-400' },
+                { label: 'Dual-Reviewed', value: stats.dual_reviewed, color: 'text-emerald-600 dark:text-emerald-400' },
                 { label: 'Unreviewed', value: stats.unreviewed, color: 'text-slate-500 dark:text-slate-400' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-center">

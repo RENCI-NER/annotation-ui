@@ -105,7 +105,7 @@ export interface TmkpEdge {
   verdict_notes: string | null;
 }
 
-export type TmkpVerdict = 'correct' | 'swap_so' | 'wrong_predicate' | 'wrong_subject' | 'wrong_object' | 'reject' | 'skip';
+export type TmkpVerdict = 'correct' | 'swap_so' | 'wrong_predicate' | 'wrong_subject' | 'wrong_object';
 
 export interface TmkpAnnotationItem {
   edge_db_id: number;
@@ -125,7 +125,7 @@ export interface TmkpAnnotationItem {
   knowledge_level: string | null;
   agent_type: string | null;
   evidence: TmkpEvidence;
-  verdict: TmkpVerdict | null;
+  verdict: string | null;
   verdict_notes: string | null;
   item_index: number;
   total_items: number;
@@ -134,7 +134,7 @@ export interface TmkpAnnotationItem {
 export interface TmkpVerificationCreate {
   edge_db_id: number;
   evidence_id?: number | null;
-  verdict: TmkpVerdict;
+  verdict: string;
   corrected_predicate?: string | null;
   corrected_subject?: string | null;
   corrected_object?: string | null;
@@ -147,12 +147,11 @@ export interface TmkpProgress {
   total_edges: number;
   verified_edges: number;
   correct_count: number;
-  rejected_count: number;
   swapped_count: number;
   wrong_predicate_count: number;
   wrong_subject_count: number;
   wrong_object_count: number;
-  skipped_count: number;
+  combo_count: number;
   remaining: number;
   completion_percentage: number;
 }
