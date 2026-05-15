@@ -62,12 +62,29 @@ The resulting controlled corpus serves as:
 
 ## Loading Data
 
+### Local (development)
+
 ```bash
 cd backend
 
 # From a local JSON file
 python load_corpus.py /path/to/corpus.json
 ```
+
+### Kubernetes (production)
+
+```bash
+# Upload a corpus via the admin API
+kubectl port-forward -n <namespace> svc/annotation-backend 8000:8000
+curl -X POST http://localhost:8000/admin/upload-corpus \
+  -F "file=@corpus.json"
+
+# Or exec into the pod and run the load script directly
+kubectl exec -it -n <namespace> deploy/annotation-backend -- \
+  python load_corpus.py /path/to/corpus.json
+```
+
+For deployment (Helm install/upgrade, restarts), see the [top-level README](../README.md#deployment).
 
 ### Corpus Format (JSON)
 ```json
