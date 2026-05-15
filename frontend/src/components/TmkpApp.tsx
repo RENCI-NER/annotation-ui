@@ -43,18 +43,25 @@ const getEntityLinks = (normalizedId: string) => {
 const formatPredicate = (p: string) => p.replace('biolink:', '').replace(/_/g, ' ');
 const formatQualifier = (q: string) => q.replace(/_/g, ' ');
 
-const VERDICT_CONFIG: Record<TmkpVerdict, { label: string; icon: string; color: string; hoverColor: string; activeColor: string; shortcut: string }> = {
-  correct:         { label: 'Correct',         icon: '✓',  color: 'text-emerald-600 dark:text-emerald-400', hoverColor: 'hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:border-emerald-300 dark:hover:border-emerald-700', activeColor: 'bg-emerald-500 text-white border-emerald-500', shortcut: 'C' },
-  swap_so:         { label: 'Swap S/O',        icon: '⇄',  color: 'text-blue-600 dark:text-blue-400',    hoverColor: 'hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700',       activeColor: 'bg-blue-500 text-white border-blue-500',    shortcut: 'S' },
-  wrong_predicate: { label: 'Wrong Pred.',     icon: '✎',  color: 'text-amber-600 dark:text-amber-400',  hoverColor: 'hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:border-amber-300 dark:hover:border-amber-700',     activeColor: 'bg-amber-500 text-white border-amber-500',  shortcut: 'W' },
-  wrong_subject:   { label: 'Wrong Subj.',     icon: '⚑',  color: 'text-cyan-600 dark:text-cyan-400',    hoverColor: 'hover:bg-cyan-50 dark:hover:bg-cyan-900/30 hover:border-cyan-300 dark:hover:border-cyan-700',         activeColor: 'bg-cyan-500 text-white border-cyan-500',    shortcut: 'U' },
-  wrong_object:    { label: 'Wrong Obj.',      icon: '⚐',  color: 'text-orange-600 dark:text-orange-400', hoverColor: 'hover:bg-orange-50 dark:hover:bg-orange-900/30 hover:border-orange-300 dark:hover:border-orange-700', activeColor: 'bg-orange-500 text-white border-orange-500', shortcut: 'O' },
+const VERDICT_CONFIG: Record<TmkpVerdict, { label: string; icon: string; color: string; hoverColor: string; activeColor: string; shortcut: string; tip: string }> = {
+  correct:         { label: 'Correct',         icon: '✓',  color: 'text-emerald-600 dark:text-emerald-400', hoverColor: 'hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:border-emerald-300 dark:hover:border-emerald-700', activeColor: 'bg-emerald-500 text-white border-emerald-500', shortcut: 'C', tip: 'The triple accurately reflects what the text says' },
+  swap_so:         { label: 'Swap S/O',        icon: '⇄',  color: 'text-blue-600 dark:text-blue-400',    hoverColor: 'hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700',       activeColor: 'bg-blue-500 text-white border-blue-500',    shortcut: 'S', tip: 'Subject and object are swapped — the text says the opposite direction' },
+  wrong_predicate: { label: 'Wrong Pred.',     icon: '✎',  color: 'text-amber-600 dark:text-amber-400',  hoverColor: 'hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:border-amber-300 dark:hover:border-amber-700',     activeColor: 'bg-amber-500 text-white border-amber-500',  shortcut: 'W', tip: 'The relationship type is wrong — the text describes a different predicate' },
+  wrong_subject:   { label: 'Wrong Subj.',     icon: '⚑',  color: 'text-cyan-600 dark:text-cyan-400',    hoverColor: 'hover:bg-cyan-50 dark:hover:bg-cyan-900/30 hover:border-cyan-300 dark:hover:border-cyan-700',         activeColor: 'bg-cyan-500 text-white border-cyan-500',    shortcut: 'U', tip: 'The subject entity is wrong — the CURIE doesn\'t match what the text refers to' },
+  wrong_object:    { label: 'Wrong Obj.',      icon: '⚐',  color: 'text-orange-600 dark:text-orange-400', hoverColor: 'hover:bg-orange-50 dark:hover:bg-orange-900/30 hover:border-orange-300 dark:hover:border-orange-700', activeColor: 'bg-orange-500 text-white border-orange-500', shortcut: 'O', tip: 'The object entity is wrong — the CURIE doesn\'t match what the text refers to' },
 };
 
 // ── Supporting Text View (single evidence) ─────────────��───────────────────
 const SupportingTextView: React.FC<{ item: TmkpAnnotationItem }> = ({ item }) => {
   const ev = item.evidence;
   const text = ev.supporting_text;
+  const [copied, setCopied] = React.useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
   const highlights: { start: number; end: number; type: 'subject' | 'object' }[] = [];
 
   if (ev.subject_start >= 0 && ev.subject_end > ev.subject_start) {
@@ -123,7 +130,25 @@ const SupportingTextView: React.FC<{ item: TmkpAnnotationItem }> = ({ item }) =>
         </div>
       </div>
       {/* Text */}
-      <div className="px-5 py-4 text-[13.5px] text-slate-700 dark:text-slate-200 leading-[1.75] font-[system-ui]">
+      <div className="relative group/text px-5 py-4 text-[13.5px] text-slate-700 dark:text-slate-200 leading-[1.75] font-[system-ui]">
+        <button
+          onClick={handleCopy}
+          title="Copy text"
+          className="absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover/text:opacity-100
+            bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600
+            text-slate-400 hover:text-slate-600 dark:hover:text-slate-300
+            transition-all duration-150 focus:outline-none focus:opacity-100"
+        >
+          {copied ? (
+            <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          )}
+        </button>
         <span className="text-slate-300 dark:text-slate-600 select-none">&ldquo;</span>
         {segments}
         <span className="text-slate-300 dark:text-slate-600 select-none">&rdquo;</span>
@@ -132,106 +157,723 @@ const SupportingTextView: React.FC<{ item: TmkpAnnotationItem }> = ({ item }) =>
   );
 };
 
+// ── Node Normalizer Modal ───────────────────────────────────────────────────
+
+// Strip all non-alphanumeric, collapse spaces, lowercase
+const normStrip = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+// Fully collapsed (no spaces at all) for tight matching
+const normCollapse = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+// Tokenize into unique words (>= 2 chars)
+const normTokens = (s: string) => new Set(normStrip(s).split(' ').filter(t => t.length >= 2));
+
+type MatchLevel = 'exact' | 'reorder' | null;
+
+function findBestMatch(inText: string, labels: string[]): { match: string | null; level: MatchLevel } {
+  const aNorm = normCollapse(inText);
+  const aTokens = normTokens(inText);
+  if (aNorm.length < 2) return { match: null, level: null };
+
+  // Pass 1: exact after stripping all special chars
+  for (const label of labels) {
+    if (normCollapse(label) === aNorm) return { match: label, level: 'exact' };
+  }
+
+  // Pass 2: same tokens, different order (e.g. "sphingomyelinase acid" vs "acid sphingomyelinase")
+  if (aTokens.size >= 2) {
+    for (const label of labels) {
+      const bTokens = normTokens(label);
+      if (bTokens.size !== aTokens.size) continue;
+      let allMatch = true;
+      aTokens.forEach(t => { if (!bTokens.has(t)) allMatch = false; });
+      if (allMatch) return { match: label, level: 'reorder' };
+    }
+  }
+
+  return { match: null, level: null };
+}
+
+function labelMatchLevel(inText: string, label: string): MatchLevel {
+  const aNorm = normCollapse(inText);
+  const bNorm = normCollapse(label);
+  if (aNorm.length < 2 || bNorm.length < 2) return null;
+  if (aNorm === bNorm) return 'exact';
+  const aTokens = normTokens(inText);
+  const bTokens = normTokens(label);
+  if (aTokens.size >= 2 && aTokens.size === bTokens.size) {
+    let allMatch = true;
+    aTokens.forEach(t => { if (!bTokens.has(t)) allMatch = false; });
+    if (allMatch) return 'reorder';
+  }
+  return null;
+}
+
+const NodeNormModal: React.FC<{
+  curie: string; inTextName?: string; source: 'nn' | 'nr'; onClose: () => void;
+}> = ({ curie, inTextName, source, onClose }) => {
+  const [nnData, setNnData] = React.useState<any>(null);
+  const [nrData, setNrData] = React.useState<{ curie: string; preferred_name: string; names: string[]; types: string[] } | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+    const sig = controller.signal;
+    (async () => {
+      try {
+        if (source === 'nn') {
+          const res = await fetch(`https://nodenormalization-sri.renci.org/get_normalized_nodes?curie=${encodeURIComponent(curie)}`, { signal: sig });
+          const json = await res.json();
+          setNnData(json[curie] || null);
+        } else {
+          const lookupRes = await fetch(
+            `https://name-resolution-sri.renci.org/lookup?string=${encodeURIComponent(inTextName || curie)}&autocomplete=false&limit=10`,
+            { signal: sig },
+          );
+          if (lookupRes.ok) {
+            const results: { curie: string; label: string; synonyms?: string[]; types?: string[] }[] = await lookupRes.json();
+            const match = results.find(r => r.curie === curie)
+              || (inTextName && results.find(r => {
+                if (normCollapse(r.label) === normCollapse(inTextName)) return true;
+                return r.synonyms?.some(s => normCollapse(s) === normCollapse(inTextName));
+              }));
+            if (match) {
+              setNrData({
+                curie: match.curie,
+                preferred_name: match.label,
+                names: [match.label, ...(match.synonyms || [])],
+                types: match.types || [],
+              });
+            }
+          }
+        }
+        setLoading(false);
+      } catch (e: any) {
+        if (e.name !== 'AbortError') { setError(e.message); setLoading(false); }
+      }
+    })();
+    return () => controller.abort();
+  }, [curie, source]);
+
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  // ── Derived data depending on source ──
+  const primaryLabel = source === 'nn' ? (nnData?.id?.label || curie)
+    : source === 'nr' ? (nrData?.preferred_name || curie)
+    : curie;
+
+  const allLabels: string[] = source === 'nn'
+    ? (nnData?.equivalent_identifiers || []).map((e: any) => e.label || '').filter(Boolean)
+    : source === 'nr' ? (nrData?.names || []) : [];
+
+  const types: string[] = source === 'nn' ? (nnData?.type || [])
+    : source === 'nr' ? (nrData?.types || []) : [];
+
+  const bestMatch = inTextName ? findBestMatch(inTextName, allLabels) : { match: null, level: null };
+
+  const grouped: Record<string, { id: string; label: string }[]> = {};
+  if (source === 'nn') {
+    (nnData?.equivalent_identifiers || []).forEach((entry: any) => {
+      const id = entry.identifier || '';
+      const prefix = id.split(':')[0] || 'Other';
+      if (!grouped[prefix]) grouped[prefix] = [];
+      grouped[prefix].push({ id, label: entry.label || '' });
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 8 }}
+        onClick={(e) => e.stopPropagation()}
+        className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700
+          w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col"
+      >
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
+                {source === 'nn' ? 'Normalized Node' : source === 'nr' ? 'Name Resolver' : 'Lookup'}
+              </span>
+              {source && (
+                <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
+                  source === 'nn' ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400'
+                    : 'bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400'
+                }`}>{source === 'nn' ? 'Node Normalizer' : 'Name Resolution'}</span>
+              )}
+            </div>
+            <div className="text-base font-bold text-slate-900 dark:text-white">{primaryLabel}</div>
+            <div className="text-xs font-mono text-slate-400 dark:text-slate-500 mt-0.5">{curie}</div>
+            {inTextName && !loading && (
+              <div className="mt-2 text-xs px-2.5 py-1.5 rounded-lg inline-flex items-center gap-1.5
+                bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 ring-1 ring-yellow-200 dark:ring-yellow-800/50">
+                <span>
+                  In-text: &ldquo;<strong>{inTextName}</strong>&rdquo;
+                  {bestMatch.level && (
+                    <span className="text-emerald-600 dark:text-emerald-400 ml-1.5">
+                      — matches &ldquo;{bestMatch.match}&rdquo;{bestMatch.level === 'reorder' && ' (reordered)'}
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
+          </div>
+          <button onClick={onClose}
+            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg
+              hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : error ? (
+            <div className="text-sm text-red-500 py-4">{error}</div>
+          ) : (source === 'nn' && !nnData) || (source === 'nr' && !nrData) ? (
+            <div className="text-sm text-slate-400 py-4">No data found for this CURIE.</div>
+          ) : source === 'nn' ? (
+            <div className="space-y-4">
+              <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-2">Equivalent Identifiers and Labels</div>
+              {Object.entries(grouped).map(([prefix, entries]) => (
+                <div key={prefix}>
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1.5">{prefix}</div>
+                  <div className="space-y-0.5">
+                    {entries.map((entry) => {
+                      const ml = inTextName && entry.label ? labelMatchLevel(inTextName, entry.label) : null;
+                      return (
+                        <div key={entry.id} className={`flex items-baseline gap-2 py-0.5 text-xs ${ml ? 'bg-emerald-50 dark:bg-emerald-900/20 px-2 -mx-2 rounded-md' : ''}`}>
+                          <span className="font-mono text-slate-400 dark:text-slate-500 shrink-0 text-[11px]">{entry.id}</span>
+                          {entry.label && (
+                            <span className={`font-medium ${ml ? 'text-emerald-700 dark:text-emerald-300 font-bold' : 'text-slate-700 dark:text-slate-300'}`}>
+                              {entry.label}{ml === 'exact' && ' ← in text'}{ml === 'reorder' && ' ← in text (reordered)'}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              {types.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-2">Types</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {types.map((t: string) => (
+                      <span key={t} className="text-[11px] px-2 py-0.5 bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300
+                        rounded-md font-medium ring-1 ring-violet-200/60 dark:ring-violet-800/40">
+                        {t.replace('biolink:', '')}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {nrData && nrData.curie && nrData.curie !== curie && (
+                <div className="px-3 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-200/60 dark:ring-amber-800/40">
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-amber-600 dark:text-amber-400 mb-1">Suggested CURIE</div>
+                  <div className="text-sm font-mono font-bold text-amber-700 dark:text-amber-300">{nrData.curie}</div>
+                  {nrData.preferred_name && (
+                    <div className="text-xs text-amber-600/80 dark:text-amber-400/70 mt-0.5">{nrData.preferred_name}</div>
+                  )}
+                </div>
+              )}
+              <div>
+                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-2">Known Names</div>
+                <div className="space-y-0.5">
+                  {(nrData?.names || []).map((name, i) => {
+                    const ml = inTextName ? labelMatchLevel(inTextName, name) : null;
+                    return (
+                      <div key={i} className={`text-xs py-0.5 ${ml ? 'bg-emerald-50 dark:bg-emerald-900/20 px-2 -mx-2 rounded-md' : ''}`}>
+                        <span className={ml ? 'text-emerald-700 dark:text-emerald-300 font-bold' : 'text-slate-700 dark:text-slate-300'}>
+                          {name}{ml === 'exact' && ' ← in text'}{ml === 'reorder' && ' ← in text (reordered)'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              {types.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-2">Types</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {types.map((t: string) => (
+                      <span key={t} className="text-[11px] px-2 py-0.5 bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300
+                        rounded-md font-medium ring-1 ring-violet-200/60 dark:ring-violet-800/40">
+                        {t.replace('biolink:', '')}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-900/30">
+          <div className="text-[10px] text-slate-400 text-center">
+            Press <kbd className="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono font-semibold">Esc</kbd> to close
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 // ── Edge Card ───────────────────────────────────────────────────────────────
-const EdgeCard: React.FC<{ item: TmkpAnnotationItem }> = ({ item }) => (
-  <div className="rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden
-    bg-gradient-to-b from-white to-slate-50/50 dark:from-slate-800 dark:to-slate-800/50">
-    {/* Assertion row */}
-    <div className="px-5 py-5">
-      <div className="flex items-stretch gap-4">
-        {/* Subject */}
-        <div className="flex-1 min-w-0">
-          <div className="inline-flex items-center gap-1.5 mb-2">
-            <span className="w-2 h-2 rounded-full bg-blue-400 dark:bg-blue-500" />
-            <span className="text-[10px] uppercase tracking-widest text-blue-500 dark:text-blue-400 font-bold">Subject</span>
-          </div>
-          <div className="text-sm font-bold text-slate-900 dark:text-white leading-snug">
-            {item.subject_name || item.subject_id}
-          </div>
-          <div className="text-[11px] text-slate-400 dark:text-slate-500 font-mono mt-1 truncate">{item.subject_id}</div>
-          <div className="flex flex-wrap gap-1 mt-2">
-            {getEntityLinks(item.subject_id).map((link, i) => (
-              <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
-                className="text-[10px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100
-                  dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 rounded-md transition-colors
-                  ring-1 ring-blue-100 dark:ring-blue-800/50">
-                {link.label}
-              </a>
-            ))}
+const greekToLatin: [RegExp, string][] = [
+  [/α/g, 'alpha'], [/β/g, 'beta'], [/γ/g, 'gamma'], [/δ/g, 'delta'],
+  [/ε/g, 'epsilon'], [/ζ/g, 'zeta'], [/η/g, 'eta'], [/θ/g, 'theta'],
+  [/κ/g, 'kappa'], [/λ/g, 'lambda'], [/μ/g, 'mu'], [/ν/g, 'nu'],
+  [/ξ/g, 'xi'], [/π/g, 'pi'], [/ρ/g, 'rho'], [/σ/g, 'sigma'],
+  [/τ/g, 'tau'], [/φ/g, 'phi'], [/χ/g, 'chi'], [/ψ/g, 'psi'], [/ω/g, 'omega'],
+];
+
+const generateVariations = (name: string): string[] => {
+  const out = new Set<string>();
+  out.add(name);
+  const spaced = name.replace(/[-_.,;:()[\]{}/\\+]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (spaced) out.add(spaced);
+  let greek = name;
+  for (const [re, lat] of greekToLatin) greek = greek.replace(re, lat);
+  if (greek !== name) {
+    out.add(greek);
+    const greekSpaced = greek.replace(/[-_.,;:()[\]{}/\\+]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (greekSpaced) out.add(greekSpaced);
+  }
+  return Array.from(out);
+};
+
+const variationsMatch = (variations: string[], label: string): boolean =>
+  variations.some(v => normCollapse(v) === normCollapse(label));
+
+const splitCamel = (s: string) => s.replace(/([A-Z])/g, ' $1').trim().split(/\s+/).map(w => w.toLowerCase());
+
+const categoryRoleWords = (category: string, role: 'subject' | 'object'): Set<string> => {
+  const raw = category.replace(/^biolink:/, '').replace(/Association$/, '').replace(/Correlated$/, '');
+  const words = splitCamel(raw);
+  const toIdx = words.indexOf('to');
+  if (toIdx > 0) {
+    const slice = role === 'subject' ? words.slice(0, toIdx) : words.slice(toIdx + 1);
+    return new Set(slice);
+  }
+  return new Set(words);
+};
+
+const typeFitsCategory = (types: string[], roleWords: Set<string>): boolean => {
+  if (roleWords.size === 0) return true;
+  for (const t of types) {
+    const base = t.replace(/^biolink:/, '');
+    if (/Or[A-Z]/.test(base) || base.endsWith('Mixin')) continue;
+    const words = splitCamel(base);
+    if (words.some(w => roleWords.has(w))) return true;
+  }
+  return false;
+};
+
+const resolveInTextName = async (
+  inTextName: string,
+  edgeCurie: string,
+  category: string,
+  role: 'subject' | 'object',
+): Promise<{ curie: string; label: string } | null> => {
+  if (inTextName.trim().length < 2) return null;
+  const variations = generateVariations(inTextName);
+  const roleWords = categoryRoleWords(category, role);
+
+  try {
+    // Step 1: Check Node Normalizer label + equivalent identifier labels
+    const nnRes = await fetch(
+      `https://nodenormalization-sri.renci.org/get_normalized_nodes?curie=${encodeURIComponent(edgeCurie)}`,
+    );
+    if (nnRes.ok) {
+      const nnData = await nnRes.json();
+      const node = nnData[edgeCurie];
+      if (node) {
+        const nnLabel = node.id?.label || '';
+        if (nnLabel && variationsMatch(variations, nnLabel)) return null;
+        const eqIds: { identifier: string; label?: string }[] = node.equivalent_identifiers || [];
+        for (const eq of eqIds) {
+          if (eq.label && variationsMatch(variations, eq.label)) return null;
+        }
+      }
+    }
+
+    // Step 2: No NN match — query Name Resolver lookup
+    for (const variant of variations) {
+      const q = variant.replace(/\s+/g, ' ').trim();
+      if (q.length < 2) continue;
+
+      const nameRes = await fetch(
+        `https://name-resolution-sri.renci.org/lookup?string=${encodeURIComponent(q)}&autocomplete=false&limit=10`,
+      );
+      if (!nameRes.ok) continue;
+      const results: { curie: string; label: string; synonyms?: string[]; types?: string[]; clique_identifier_count?: number }[] =
+        await nameRes.json();
+
+      const candidates = results.filter(r => {
+        const labelMatch = variationsMatch(variations, r.label);
+        const synMatch = r.synonyms?.some(s => variationsMatch(variations, s));
+        if (!labelMatch && !synMatch) return false;
+        if (r.curie === edgeCurie) return false;
+        if (r.types && r.types.length > 0) return typeFitsCategory(r.types, roleWords);
+        return true;
+      });
+      if (candidates.length === 0) continue;
+      candidates.sort((a, b) => (b.clique_identifier_count || 0) - (a.clique_identifier_count || 0));
+      return { curie: candidates[0].curie, label: candidates[0].label };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const EdgeCard: React.FC<{ item: TmkpAnnotationItem }> = ({ item }) => {
+  const [normTarget, setNormTarget] = React.useState<{ curie: string; inTextName?: string; source: 'nn' | 'nr' } | null>(null);
+  const [subjectNnLabel, setSubjectNnLabel] = React.useState<string | null>(null);
+  const [objectNnLabel, setObjectNnLabel] = React.useState<string | null>(null);
+  const [showPredicateDesc, setShowPredicateDesc] = React.useState(false);
+  const [showSubjectLinks, setShowSubjectLinks] = React.useState(false);
+  const [showObjectLinks, setShowObjectLinks] = React.useState(false);
+  const { predicates } = useBiolinkPredicates();
+
+  const predicateDesc = React.useMemo(() => {
+    const normalized = item.predicate.replace('biolink:', '').replace(/_/g, ' ');
+    const match = predicates.find(p => p.name === normalized || p.name === item.predicate.replace('biolink:', ''));
+    return match?.description || null;
+  }, [item.predicate, predicates]);
+
+  const ev = item.evidence;
+  const text = ev.supporting_text;
+  const subjectInText = (ev.subject_start >= 0 && ev.subject_end > ev.subject_start && ev.subject_end <= text.length)
+    ? text.slice(ev.subject_start, ev.subject_end) : null;
+  const objectInText = (ev.object_start >= 0 && ev.object_end > ev.object_start && ev.object_end <= text.length)
+    ? text.slice(ev.object_start, ev.object_end) : null;
+
+  React.useEffect(() => {
+    setSubjectNnLabel(null);
+    setObjectNnLabel(null);
+
+    const curies = new Set([item.subject_id, item.object_id]);
+    const curieParam = Array.from(curies).map(c => `curie=${encodeURIComponent(c)}`).join('&');
+    fetch(`https://nodenormalization-sri.renci.org/get_normalized_nodes?${curieParam}`)
+      .then(r => r.json())
+      .then(data => {
+        const sNode = data[item.subject_id];
+        if (sNode?.id?.label) setSubjectNnLabel(sNode.id.label);
+        const oNode = data[item.object_id];
+        if (oNode?.id?.label) setObjectNnLabel(oNode.id.label);
+      })
+      .catch(() => {});
+  }, [item.evidence_id]);
+
+  return (
+    <>
+      <AnimatePresence>
+        {normTarget && <NodeNormModal curie={normTarget.curie} inTextName={normTarget.inTextName} source={normTarget.source} onClose={() => setNormTarget(null)} />}
+      </AnimatePresence>
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden
+        bg-gradient-to-b from-white to-slate-50/50 dark:from-slate-800 dark:to-slate-800/50">
+        {/* Assertion row */}
+        <div className="px-5 py-5">
+          <div className="flex items-stretch gap-4">
+            {/* Subject */}
+            <div className="flex-1 min-w-0">
+              <div className="inline-flex items-center gap-1.5 mb-2 justify-end">
+                <span className="w-2 h-2 rounded-full bg-blue-400 dark:bg-blue-500" />
+                <span className="text-[10px] uppercase tracking-widest text-blue-500 dark:text-blue-400 font-bold">Subject</span>
+              </div>
+              <button
+                onClick={() => setNormTarget({ curie: item.subject_id, inTextName: subjectInText || undefined, source: 'nn' })}
+                className="text-sm font-bold text-slate-900 dark:text-white leading-snug text-left w-full
+                  hover:text-blue-600 dark:hover:text-blue-300 cursor-pointer transition-colors"
+              >
+                {subjectNnLabel || item.subject_name || item.subject_id}
+              </button>
+              <button
+                onClick={() => setNormTarget({ curie: item.subject_id, inTextName: subjectInText || undefined, source: 'nn' })}
+                className="text-[11px] text-blue-500 dark:text-blue-400 font-mono mt-1 truncate block
+                  hover:underline hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer transition-colors"
+              >
+                {item.subject_id}
+              </button>
+              <div className="relative mt-2 inline-block">
+                <button onClick={() => setShowSubjectLinks(v => !v)}
+                  className="p-1 rounded-md text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                  title="External links">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </button>
+                <AnimatePresence>
+                  {showSubjectLinks && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {getEntityLinks(item.subject_id).map((link, i) => (
+                          <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                            className="text-[10px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100
+                              dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 rounded-md transition-colors
+                              ring-1 ring-blue-100 dark:ring-blue-800/50">
+                            {link.label}
+                          </a>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            {/* Predicate arrow */}
+            <div className="flex flex-col items-center justify-center gap-1.5 px-4 shrink-0">
+              <button
+                onClick={() => setShowPredicateDesc(v => !v)}
+                className="px-3 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-800/60
+                  cursor-pointer hover:bg-violet-100 dark:hover:bg-violet-900/50 transition-colors"
+              >
+                <div className="text-xs font-bold text-violet-700 dark:text-violet-300 text-center whitespace-nowrap">
+                  {formatPredicate(item.predicate)}
+                </div>
+              </button>
+              <AnimatePresence>
+                {showPredicateDesc && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden w-48"
+                  >
+                    <div className="px-2.5 py-2 rounded-lg bg-violet-100/80 dark:bg-violet-900/40 border border-violet-200/60
+                      dark:border-violet-700/50 text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed text-center">
+                      {predicateDesc || 'No description available for this predicate.'}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <svg className="w-6 h-3 text-violet-300 dark:text-violet-600" viewBox="0 0 24 12" fill="none">
+                <path d="M0 6h20m0 0l-4-4m4 4l-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {item.qualified_predicate && (
+                <div className="text-[10px] text-violet-500/70 dark:text-violet-400/50 font-medium">
+                  via {formatPredicate(item.qualified_predicate)}
+                </div>
+              )}
+              {(item.object_direction_qualifier || item.object_aspect_qualifier) && (
+                <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
+                  {item.object_direction_qualifier && (
+                    <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300
+                      text-[10px] font-medium ring-1 ring-amber-200/60 dark:ring-amber-800/40">
+                      {formatQualifier(item.object_direction_qualifier)}
+                    </span>
+                  )}
+                  {item.object_aspect_qualifier && (
+                    <span className="px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300
+                      text-[10px] font-medium ring-1 ring-purple-200/60 dark:ring-purple-800/40">
+                      {formatQualifier(item.object_aspect_qualifier)}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Object */}
+            <div className="flex-1 min-w-0 text-right">
+              <div className="inline-flex items-center gap-1.5 mb-2 justify-end">
+                <span className="w-2 h-2 rounded-full bg-red-400 dark:bg-red-500" />
+                <span className="text-[10px] uppercase tracking-widest text-red-500 dark:text-red-400 font-bold">Object</span>
+              </div>
+              <button
+                onClick={() => setNormTarget({ curie: item.object_id, inTextName: objectInText || undefined, source: 'nn' })}
+                className="text-sm font-bold text-slate-900 dark:text-white leading-snug text-right w-full
+                  hover:text-red-600 dark:hover:text-red-300 cursor-pointer transition-colors"
+              >
+                {objectNnLabel || item.object_name || item.object_id}
+              </button>
+              <button
+                onClick={() => setNormTarget({ curie: item.object_id, inTextName: objectInText || undefined, source: 'nn' })}
+                className="text-[11px] text-red-500 dark:text-red-400 font-mono mt-1 truncate block ml-auto
+                  hover:underline hover:text-red-700 dark:hover:text-red-300 cursor-pointer transition-colors"
+              >
+                {item.object_id}
+              </button>
+              <div className="relative mt-2 inline-block ml-auto">
+                <button onClick={() => setShowObjectLinks(v => !v)}
+                  className="p-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors ml-auto block"
+                  title="External links">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </button>
+                <AnimatePresence>
+                  {showObjectLinks && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="flex flex-wrap gap-1 mt-1 justify-end">
+                        {getEntityLinks(item.object_id).map((link, i) => (
+                          <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                            className="text-[10px] px-1.5 py-0.5 bg-red-50 dark:bg-red-900/30 hover:bg-red-100
+                              dark:hover:bg-red-800/50 text-red-600 dark:text-red-300 rounded-md transition-colors
+                              ring-1 ring-red-100 dark:ring-red-800/50">
+                            {link.label}
+                          </a>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Predicate arrow */}
-        <div className="flex flex-col items-center justify-center gap-1.5 px-4 shrink-0">
-          <div className="px-3 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-800/60">
-            <div className="text-xs font-bold text-violet-700 dark:text-violet-300 text-center whitespace-nowrap">
-              {formatPredicate(item.predicate)}
-            </div>
-          </div>
-          <svg className="w-6 h-3 text-violet-300 dark:text-violet-600" viewBox="0 0 24 12" fill="none">
-            <path d="M0 6h20m0 0l-4-4m4 4l-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          {item.qualified_predicate && (
-            <div className="text-[10px] text-violet-500/70 dark:text-violet-400/50 font-medium">
-              via {formatPredicate(item.qualified_predicate)}
-            </div>
+        {/* Meta bar */}
+        <div className="px-5 py-2.5 bg-slate-50/80 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-700/60
+          flex items-center gap-2 flex-wrap">
+          {item.category && (
+            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400
+              text-[11px] font-medium">
+              {item.category.replace('biolink:', '')}
+            </span>
           )}
-          {(item.object_direction_qualifier || item.object_aspect_qualifier) && (
-            <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
-              {item.object_direction_qualifier && (
-                <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300
-                  text-[10px] font-medium ring-1 ring-amber-200/60 dark:ring-amber-800/40">
-                  {formatQualifier(item.object_direction_qualifier)}
-                </span>
-              )}
-              {item.object_aspect_qualifier && (
-                <span className="px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300
-                  text-[10px] font-medium ring-1 ring-purple-200/60 dark:ring-purple-800/40">
-                  {formatQualifier(item.object_aspect_qualifier)}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Object */}
-        <div className="flex-1 min-w-0 text-right">
-          <div className="inline-flex items-center gap-1.5 mb-2 justify-end">
-            <span className="text-[10px] uppercase tracking-widest text-red-500 dark:text-red-400 font-bold">Object</span>
-            <span className="w-2 h-2 rounded-full bg-red-400 dark:bg-red-500" />
-          </div>
-          <div className="text-sm font-bold text-slate-900 dark:text-white leading-snug">
-            {item.object_name || item.object_id}
-          </div>
-          <div className="text-[11px] text-slate-400 dark:text-slate-500 font-mono mt-1 truncate">{item.object_id}</div>
-          <div className="flex flex-wrap gap-1 mt-2 justify-end">
-            {getEntityLinks(item.object_id).map((link, i) => (
-              <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
-                className="text-[10px] px-1.5 py-0.5 bg-red-50 dark:bg-red-900/30 hover:bg-red-100
-                  dark:hover:bg-red-800/50 text-red-600 dark:text-red-300 rounded-md transition-colors
-                  ring-1 ring-red-100 dark:ring-red-800/50">
-                {link.label}
-              </a>
-            ))}
-          </div>
         </div>
       </div>
-    </div>
+    </>
+  );
+};
 
-    {/* Meta bar */}
-    <div className="px-5 py-2.5 bg-slate-50/80 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-700/60
-      flex items-center gap-2 flex-wrap">
-      {item.category && (
-        <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400
-          text-[11px] font-medium">
-          {item.category.replace('biolink:', '')}
-        </span>
-      )}
-    </div>
-  </div>
-);
+// ── LLM Config Modal ──────────────────────────────────────────────────────
+const LlmConfigModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const [provider, setProvider] = React.useState('');
+  const [baseUrl, setBaseUrl] = React.useState('');
+  const [model, setModel] = React.useState('');
+  const [apiKey, setApiKey] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
+  const [loaded, setLoaded] = React.useState(false);
 
-// ── Verdict Panel ──────────────────��────────────────────────────────────────
+  React.useEffect(() => {
+    tmkpApi.getLlmConfig().then(cfg => {
+      setProvider(cfg.provider || '');
+      setBaseUrl(cfg.base_url || '');
+      setModel(cfg.model || '');
+      setLoaded(true);
+    }).catch(() => setLoaded(true));
+  }, []);
+
+  const save = async () => {
+    if (!provider) { setSaveError('Select a provider or preset'); return; }
+    if (!model) { setSaveError('Model is required'); return; }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await tmkpApi.setLlmConfig({ provider, base_url: baseUrl, model, api_key: apiKey });
+      onClose();
+    } catch (err: any) {
+      setSaveError(err?.response?.data?.detail || err?.message || 'Save failed');
+      setSaving(false);
+    }
+  };
+
+  const presets = [
+    { label: 'Anthropic (Claude)', provider: 'anthropic', base_url: '', model: 'claude-sonnet-4-20250514', needsKey: true },
+    { label: 'OpenAI', provider: 'openai', base_url: 'https://api.openai.com/v1', model: 'gpt-4o-mini', needsKey: true },
+    { label: 'Ollama (local)', provider: 'openai', base_url: 'http://localhost:11434/v1', model: 'llama3.2', needsKey: false },
+    { label: 'LM Studio (local)', provider: 'openai', base_url: 'http://localhost:1234/v1', model: 'default', needsKey: false },
+  ];
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[999] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <motion.div
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+        initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white">LLM Configuration</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-lg cursor-pointer">&times;</button>
+        </div>
+        {!loaded ? (
+          <div className="p-8 text-center text-sm text-slate-400">Loading...</div>
+        ) : (
+          <div className="px-5 py-4 space-y-4">
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2 block">Quick Presets</label>
+              <div className="flex flex-wrap gap-1.5">
+                {presets.map(p => (
+                  <button key={p.label} onClick={() => { setProvider(p.provider); setBaseUrl(p.base_url); setModel(p.model); }}
+                    className={`text-[11px] px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                      provider === p.provider && baseUrl === p.base_url
+                        ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-300 dark:ring-indigo-700'
+                        : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                    }`}>{p.label}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 block">Base URL</label>
+              <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder="e.g. http://localhost:11434/v1"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700
+                  text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none font-mono" />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 block">Model</label>
+              <input value={model} onChange={e => setModel(e.target.value)} placeholder="e.g. llama3.2, gpt-4o-mini"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700
+                  text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none font-mono" />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 block">
+                API Key <span className="normal-case font-normal">(leave empty for local models)</span>
+              </label>
+              <input value={apiKey} onChange={e => setApiKey(e.target.value)} type="password" placeholder="sk-..."
+                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700
+                  text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none font-mono" />
+            </div>
+            {saveError && (
+              <div className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg">{saveError}</div>
+            )}
+            <button onClick={save} disabled={saving}
+              className="w-full py-2 text-xs font-bold text-white bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50
+                rounded-lg transition-colors cursor-pointer">
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+};
+
+// ── Verdict Panel ─────────────────────────────────────────────────────────
 const VerdictPanel: React.FC<{
   item: TmkpAnnotationItem;
   onVerdict: (verdict: string, extra?: { correctedPredicate?: string; correctedSubject?: string; correctedObject?: string; notes?: string }) => void;
@@ -247,10 +889,20 @@ const VerdictPanel: React.FC<{
   const [correctedObject, setCorrectedObject] = useState('');
   const [notes, setNotes] = useState(item.verdict_notes || '');
   const [searchTerm, setSearchTerm] = useState('');
+  const [subjectSuggestion, setSubjectSuggestion] = useState<{ curie: string; label: string } | null>(null);
+  const [objectSuggestion, setObjectSuggestion] = useState<{ curie: string; label: string } | null>(null);
+  const [normTarget, setNormTarget] = useState<{ curie: string; inTextName?: string; source: 'nn' | 'nr' } | null>(null);
   const [showSaved, setShowSaved] = useState(false);
 
   const { predicates, loading: predicatesLoading } = useBiolinkPredicates();
   const filteredPredicates = useSmartPredicateSearch(predicates, searchTerm);
+
+  const ev = item.evidence;
+  const text = ev.supporting_text;
+  const subjectInText = (ev.subject_start >= 0 && ev.subject_end > ev.subject_start && ev.subject_end <= text.length)
+    ? text.slice(ev.subject_start, ev.subject_end) : null;
+  const objectInText = (ev.object_start >= 0 && ev.object_end > ev.object_start && ev.object_end <= text.length)
+    ? text.slice(ev.object_start, ev.object_end) : null;
 
   useEffect(() => {
     setSelected(parseVerdicts(item.verdict));
@@ -260,6 +912,17 @@ const VerdictPanel: React.FC<{
     setNotes(item.verdict_notes || '');
     setSearchTerm('');
     setShowSaved(false);
+    setSubjectSuggestion(null);
+    setObjectSuggestion(null);
+    setNormTarget(null);
+
+    const cat = item.category || '';
+    if (subjectInText) {
+      resolveInTextName(subjectInText, item.subject_id, cat, 'subject').then(s => s && setSubjectSuggestion(s));
+    }
+    if (objectInText) {
+      resolveInTextName(objectInText, item.object_id, cat, 'object').then(s => s && setObjectSuggestion(s));
+    }
   }, [item.evidence_id]);
 
   const onVerdictRef = React.useRef(onVerdict);
@@ -325,41 +988,50 @@ const VerdictPanel: React.FC<{
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {
+        if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); doSubmit(selectedRef.current); }
+        return;
+      }
 
-      if (e.key === 'c' || e.key === 'C') { e.preventDefault(); toggleVerdict('correct'); }
-      else if (e.key === 's' || e.key === 'S') { e.preventDefault(); toggleVerdict('swap_so'); }
-      else if (e.key === 'w' || e.key === 'W') { e.preventDefault(); toggleVerdict('wrong_predicate'); }
-      else if (e.key === 'u' || e.key === 'U') { e.preventDefault(); toggleVerdict('wrong_subject'); }
-      else if (e.key === 'o' || e.key === 'O') { e.preventDefault(); toggleVerdict('wrong_object'); }
-      else if (e.key === 'Enter') { e.preventDefault(); doSubmit(selectedRef.current); }
+      if (e.key === 'C') { e.preventDefault(); toggleVerdict('correct'); }
+      else if (e.key === 'S') { e.preventDefault(); toggleVerdict('swap_so'); }
+      else if (e.key === 'W') { e.preventDefault(); toggleVerdict('wrong_predicate'); }
+      else if (e.key === 'U') { e.preventDefault(); toggleVerdict('wrong_subject'); }
+      else if (e.key === 'O') { e.preventDefault(); toggleVerdict('wrong_object'); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [doSubmit, toggleVerdict]);
 
   return (
+    <>
+    <AnimatePresence>
+      {normTarget && <NodeNormModal curie={normTarget.curie} inTextName={normTarget.inTextName} source={normTarget.source} onClose={() => setNormTarget(null)} />}
+    </AnimatePresence>
     <div className="rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden
       bg-white dark:bg-slate-800">
       {/* Header */}
       <div className="px-5 py-3 bg-gradient-to-r from-slate-50 to-white dark:from-slate-800 dark:to-slate-800
         border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
         <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 tracking-tight">Your Verdict</h3>
-        <AnimatePresence>
-          {showSaved && (
-            <motion.span
-              initial={{ opacity: 0, scale: 0.8, y: -4 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, y: 4 }}
-              className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400
-                bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full"
-            >
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-              Saved
-            </motion.span>
-          )}
-        </AnimatePresence>
+        <div className="flex items-center gap-2">
+          <AnimatePresence>
+            {showSaved && (
+              <motion.span
+                initial={{ opacity: 0, scale: 0.8, y: -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400
+                  bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full"
+              >
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                Saved
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* Verdict buttons */}
@@ -371,6 +1043,7 @@ const VerdictPanel: React.FC<{
               <button
                 key={key}
                 onClick={() => toggleVerdict(key)}
+                title={cfg.tip}
                 className={`group flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border-2
                   transition-all duration-150 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-violet-500
                   ${isActive
@@ -382,7 +1055,7 @@ const VerdictPanel: React.FC<{
                 <span className="text-[11px] font-bold leading-tight">{cfg.label}</span>
                 <kbd className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
                   isActive ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'
-                }`}>{cfg.shortcut}</kbd>
+                }`}>SHIFT+{cfg.shortcut}</kbd>
               </button>
             );
           })}
@@ -474,12 +1147,26 @@ const VerdictPanel: React.FC<{
               className="overflow-hidden"
             >
               <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs mb-3">
+                  <span className="text-slate-400">Current: <span className="font-semibold text-slate-600 dark:text-slate-300">{item.subject_name || item.subject_id}</span></span>
+                  {subjectSuggestion && (
+                    <button
+                      onClick={() => setNormTarget({ curie: subjectSuggestion.curie, inTextName: subjectInText || undefined, source: 'nr' })}
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20
+                        border border-amber-200 dark:border-amber-700/50 group cursor-pointer
+                        hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                    >
+                      <span className="text-[10px] uppercase tracking-wider font-bold text-amber-600 dark:text-amber-400">Suggested:</span>
+                      <span className="font-mono font-semibold text-amber-700 dark:text-amber-300 group-hover:underline">
+                        {subjectSuggestion.curie}
+                      </span>
+                      <span className="text-slate-500 dark:text-slate-400">({subjectSuggestion.label})</span>
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mb-2">
                   <span className="text-cyan-500">⚑</span>
                   <span className="text-xs font-bold text-cyan-700 dark:text-cyan-300">Correct subject <span className="font-normal text-slate-400">(optional)</span></span>
-                </div>
-                <div className="text-xs text-slate-400 mb-2">
-                  Current: <span className="font-semibold text-slate-600 dark:text-slate-300">{item.subject_name || item.subject_id}</span>
                 </div>
                 <input
                   type="text"
@@ -506,12 +1193,26 @@ const VerdictPanel: React.FC<{
               className="overflow-hidden"
             >
               <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs mb-3">
+                  <span className="text-slate-400">Current: <span className="font-semibold text-slate-600 dark:text-slate-300">{item.object_name || item.object_id}</span></span>
+                  {objectSuggestion && (
+                    <button
+                      onClick={() => setNormTarget({ curie: objectSuggestion.curie, inTextName: objectInText || undefined, source: 'nr' })}
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20
+                        border border-amber-200 dark:border-amber-700/50 group cursor-pointer
+                        hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                    >
+                      <span className="text-[10px] uppercase tracking-wider font-bold text-amber-600 dark:text-amber-400">Suggested:</span>
+                      <span className="font-mono font-semibold text-amber-700 dark:text-amber-300 group-hover:underline">
+                        {objectSuggestion.curie}
+                      </span>
+                      <span className="text-slate-500 dark:text-slate-400">({objectSuggestion.label})</span>
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mb-2">
                   <span className="text-orange-500">⚐</span>
                   <span className="text-xs font-bold text-orange-700 dark:text-orange-300">Correct object <span className="font-normal text-slate-400">(optional)</span></span>
-                </div>
-                <div className="text-xs text-slate-400 mb-2">
-                  Current: <span className="font-semibold text-slate-600 dark:text-slate-300">{item.object_name || item.object_id}</span>
                 </div>
                 <input
                   type="text"
@@ -587,7 +1288,7 @@ const VerdictPanel: React.FC<{
           {Object.entries(VERDICT_CONFIG).map(([, cfg]) => (
             <span key={cfg.shortcut} className="inline-flex items-center gap-1">
               <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono font-semibold text-slate-500 dark:text-slate-400">
-                {cfg.shortcut}
+                SHIFT+{cfg.shortcut}
               </kbd>
               <span>{cfg.label}</span>
             </span>
@@ -595,6 +1296,7 @@ const VerdictPanel: React.FC<{
         </div>
       </div>
     </div>
+    </>
   );
 };
 
@@ -620,7 +1322,8 @@ const ProgressStrip: React.FC<{
   items: TmkpAnnotationItem[];
   currentIndex: number;
   onJump: (idx: number) => void;
-}> = ({ items, currentIndex, onJump }) => {
+  overall?: TmkpProgress | null;
+}> = ({ items, currentIndex, onJump, overall }) => {
   const answeredCount = items.filter(i => i.verdict).length;
   return (
     <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
@@ -645,6 +1348,29 @@ const ProgressStrip: React.FC<{
           />
         ))}
       </div>
+      {overall && (
+        <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-700/60">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Overall</span>
+            <span className="text-[10px] font-bold tabular-nums text-violet-600 dark:text-violet-400">
+              {overall.completion_percentage.toFixed(1)}%
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden mb-2">
+            <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-500 transition-all duration-500"
+              style={{ width: `${Math.min(100, overall.completion_percentage)}%` }} />
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] tabular-nums">
+            <span className="text-emerald-600 dark:text-emerald-400" title="Correct">{overall.correct_count} correct</span>
+            <span className="text-blue-600 dark:text-blue-400" title="Swapped">{overall.swapped_count} swapped</span>
+            <span className="text-amber-600 dark:text-amber-400" title="Wrong predicate">{overall.wrong_predicate_count} wrong pred</span>
+            <span className="text-cyan-600 dark:text-cyan-400" title="Wrong subject">{overall.wrong_subject_count} wrong subj</span>
+            <span className="text-orange-600 dark:text-orange-400" title="Wrong object">{overall.wrong_object_count} wrong obj</span>
+            <span className="text-pink-600 dark:text-pink-400" title="Multi-verdict combos">{overall.combo_count} combo</span>
+            <span className="text-slate-400 dark:text-slate-500">{overall.remaining} remaining</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -663,6 +1389,7 @@ export const TmkpApp: React.FC = () => {
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewPage, setReviewPage] = useState(0);
 
+  const [showGuide, setShowGuide] = useState(() => !localStorage.getItem('tmkp_guide_dismissed'));
   const batchRef = React.useRef(batch);
   batchRef.current = batch;
 
@@ -958,46 +1685,45 @@ export const TmkpApp: React.FC = () => {
         </div>
       </header>
 
-      {/* Progress bar */}
-      {progress && (
-        <div className="flex-shrink-0 bg-white dark:bg-slate-800/80 backdrop-blur-sm
-          border-b border-slate-200 dark:border-slate-700/60 px-5 py-2.5">
-          <div className="max-w-[1600px] mx-auto">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1.5 flex-1 min-w-0 flex-wrap">
-                {[
-                  { label: 'Correct', value: progress.correct_count, dotColor: 'bg-emerald-400' },
-                  { label: 'Swapped', value: progress.swapped_count, dotColor: 'bg-blue-400' },
-                  { label: 'Pred.', value: progress.wrong_predicate_count, dotColor: 'bg-amber-400' },
-                  { label: 'Subj.', value: progress.wrong_subject_count, dotColor: 'bg-cyan-400' },
-                  { label: 'Obj.', value: progress.wrong_object_count, dotColor: 'bg-orange-400' },
-                  { label: 'Left', value: progress.remaining, dotColor: 'bg-slate-300 dark:bg-slate-600' },
-                ].map(({ label, value, dotColor }) => (
-                  <div key={label} className="flex items-center gap-1 px-2 py-1 rounded-md
-                    hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors" title={label}>
-                    <span className={`w-2 h-2 rounded-full ${dotColor}`} />
-                    <span className="text-xs font-bold tabular-nums text-slate-700 dark:text-slate-200">{value}</span>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500 hidden sm:inline">{label}</span>
+      {/* Onboarding guide */}
+      <AnimatePresence>
+        {showGuide && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex-shrink-0 overflow-hidden"
+          >
+            <div className="bg-violet-50 dark:bg-violet-950/30 border-b border-violet-200 dark:border-violet-800/50 px-5 py-3">
+              <div className="max-w-[1600px] mx-auto flex items-start gap-4">
+                <div className="flex-1 grid grid-cols-3 gap-4 text-xs text-slate-600 dark:text-slate-300">
+                  <div>
+                    <div className="font-bold text-violet-700 dark:text-violet-300 mb-1">Left Panel</div>
+                    <p className="leading-relaxed">Shows the edge assertion (Subject &rarr; Predicate &rarr; Object) with entity names from Node Normalizer. Below is the supporting text with highlighted spans.</p>
                   </div>
-                ))}
-              </div>
-              <div className="flex items-center gap-2.5 shrink-0">
-                <div className="w-32 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                  <motion.div
-                    className="h-full bg-gradient-to-r from-violet-400 to-purple-500 rounded-full"
-                    initial={false}
-                    animate={{ width: `${progress.completion_percentage}%` }}
-                    transition={{ duration: 0.6, ease: 'easeOut' }}
-                  />
+                  <div>
+                    <div className="font-bold text-violet-700 dark:text-violet-300 mb-1">Right Panel</div>
+                    <p className="leading-relaxed">Pick your verdict. <strong>Shift+C</strong> = Correct (auto-submits). Other verdicts combine freely — press <strong>Enter</strong> to submit.</p>
+                  </div>
+                  <div>
+                    <div className="font-bold text-violet-700 dark:text-violet-300 mb-1">Clickable Elements</div>
+                    <p className="leading-relaxed">Click entity names/CURIEs to see Node Normalizer data. Click the predicate for its definition. Amber "Suggested" badges link to Name Resolver alternatives.</p>
+                  </div>
                 </div>
-                <span className="text-xs font-bold text-violet-600 dark:text-violet-400 tabular-nums w-9 text-right">
-                  {progress.completion_percentage}%
-                </span>
+                <button
+                  onClick={() => { setShowGuide(false); localStorage.setItem('tmkp_guide_dismissed', '1'); }}
+                  className="shrink-0 px-2.5 py-1 text-[11px] font-semibold text-violet-600 dark:text-violet-400
+                    bg-violet-100 dark:bg-violet-900/40 hover:bg-violet-200 dark:hover:bg-violet-800/50
+                    rounded-md transition-colors"
+                >
+                  Got it
+                </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Body */}
       <div className="flex-1 overflow-hidden">
@@ -1056,7 +1782,7 @@ export const TmkpApp: React.FC = () => {
               )}
 
               {/* Progress strip */}
-              <ProgressStrip items={batch} currentIndex={batchIndex} onJump={setBatchIndex} />
+              <ProgressStrip items={batch} currentIndex={batchIndex} onJump={setBatchIndex} overall={progress} />
 
               {/* Navigation */}
               <div className="flex items-center justify-between">

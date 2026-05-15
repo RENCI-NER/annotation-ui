@@ -5,6 +5,7 @@ from typing import List, Optional
 from datetime import datetime, timezone
 import json
 import random
+import os
 
 import models
 import schemas
@@ -837,3 +838,144 @@ def _ingest_tmkp_edge(data: dict, db: Session) -> bool:
                 db.add(ev)
 
     return True
+
+
+# ── LLM Configuration & Verdict Suggestion ─────────────────────────────────
+
+@router.get("/admin/llm-config")
+def get_llm_config():
+    return {
+        "provider": os.environ.get("LLM_PROVIDER", ""),
+        "base_url": os.environ.get("LLM_BASE_URL", ""),
+        "model": os.environ.get("LLM_MODEL", ""),
+        "has_anthropic_key": bool(os.environ.get("ANTHROPIC_API_KEY")),
+        "has_openai_key": bool(os.environ.get("OPENAI_API_KEY")),
+        "has_llm_key": bool(os.environ.get("LLM_API_KEY")),
+    }
+
+
+@router.post("/admin/llm-config")
+def set_llm_config(body: dict):
+    if "provider" in body:
+        os.environ["LLM_PROVIDER"] = body["provider"]
+    if "base_url" in body:
+        os.environ["LLM_BASE_URL"] = body["base_url"]
+    if "model" in body:
+        os.environ["LLM_MODEL"] = body["model"]
+    if "api_key" in body and body["api_key"]:
+        provider = body.get("provider", os.environ.get("LLM_PROVIDER", ""))
+        if provider == "anthropic":
+            os.environ["ANTHROPIC_API_KEY"] = body["api_key"]
+        else:
+            os.environ["OPENAI_API_KEY"] = body["api_key"]
+    return {"status": "ok"}
+
+
+@router.post("/suggest-verdict")
+def suggest_verdict(
+    body: dict,
+    db: Session = Depends(get_db),
+):
+    llm_provider = os.environ.get("LLM_PROVIDER", "").lower()
+    if not llm_provider:
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            llm_provider = "anthropic"
+        elif os.environ.get("OPENAI_API_KEY"):
+            llm_provider = "openai"
+        elif os.environ.get("LLM_BASE_URL"):
+            llm_provider = "openai"
+    if not llm_provider:
+        raise HTTPException(
+            status_code=503,
+            detail="LLM not configured. Set env vars: ANTHROPIC_API_KEY for Anthropic, "
+                   "or OPENAI_API_KEY / LLM_BASE_URL + LLM_MODEL for OpenAI-compatible (Ollama, vLLM, LM Studio, etc.)",
+        )
+
+    edge_db_id = body.get("edge_db_id")
+    evidence_id = body.get("evidence_id")
+    if not edge_db_id or not evidence_id:
+        raise HTTPException(status_code=400, detail="edge_db_id and evidence_id required")
+
+    edge = db.query(models.TmkpEdge).filter(models.TmkpEdge.id == edge_db_id).first()
+    evidence = db.query(models.TmkpEvidence).filter(models.TmkpEvidence.id == evidence_id).first()
+    if not edge or not evidence:
+        raise HTTPException(status_code=404, detail="Edge or evidence not found")
+
+    text = evidence.supporting_text
+    subj_span = text[evidence.subject_start:evidence.subject_end] if evidence.subject_start < len(text) else ""
+    obj_span = text[evidence.object_start:evidence.object_end] if evidence.object_start < len(text) else ""
+
+    qualifiers = ""
+    if edge.qualified_predicate:
+        qualifiers += f"\n- Qualified predicate: {edge.qualified_predicate}"
+    if edge.object_direction_qualifier:
+        qualifiers += f"\n- Direction qualifier: {edge.object_direction_qualifier}"
+    if edge.object_aspect_qualifier:
+        qualifiers += f"\n- Aspect qualifier: {edge.object_aspect_qualifier}"
+
+    prompt = f"""You are an expert biomedical knowledge graph curator. A text-mining pipeline extracted the following relationship from a scientific publication. Determine whether the extraction is correct.
+
+EXTRACTED TRIPLE:
+- Subject: {edge.subject_name or edge.subject_id} ({edge.subject_id})
+- Predicate: {edge.predicate}
+- Object: {edge.object_name or edge.object_id} ({edge.object_id}){qualifiers}
+
+SUPPORTING TEXT (from the paper):
+"{text}"
+
+The pipeline identified "{subj_span}" as the subject and "{obj_span}" as the object in the text.
+
+TASK: Assess whether this extraction is correct. Consider:
+1. Does the text actually support the stated relationship between these entities?
+2. Are the subject and object correctly assigned, or should they be swapped?
+3. Is the predicate accurate for what the text describes?
+4. Are the entity mentions in the text actually referring to the claimed subject/object?
+
+Respond with ONLY a JSON object (no markdown, no backticks):
+{{"verdict": "<verdict>", "confidence": <0.0-1.0>, "reasoning": "<1-2 sentence explanation>"}}
+
+Where verdict is one of:
+- "correct" — extraction accurately reflects the text
+- "swap_so" — subject and object should be swapped
+- "wrong_predicate" — relationship type is incorrect
+- "wrong_subject" — the subject entity is wrong
+- "wrong_object" — the object entity is wrong
+- comma-separated combination for multiple issues, e.g. "swap_so,wrong_predicate"
+"""
+
+    try:
+        if llm_provider == "anthropic":
+            import anthropic
+            client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+            response = client.messages.create(
+                model=os.environ.get("LLM_MODEL", "claude-sonnet-4-20250514"),
+                max_tokens=300,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = response.content[0].text.strip()
+        else:
+            import httpx
+            base_url = os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1")
+            api_key = os.environ.get("OPENAI_API_KEY", os.environ.get("LLM_API_KEY", ""))
+            model = os.environ.get("LLM_MODEL", "gpt-4o-mini")
+            headers = {"Content-Type": "application/json"}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            resp = httpx.post(
+                f"{base_url.rstrip('/')}/chat/completions",
+                headers=headers,
+                json={"model": model, "max_tokens": 300, "messages": [{"role": "user", "content": prompt}]},
+                timeout=60,
+            )
+            resp.raise_for_status()
+            raw = resp.json()["choices"][0]["message"]["content"].strip()
+        result = json.loads(raw)
+        return {
+            "verdict": result.get("verdict", "correct"),
+            "confidence": result.get("confidence", 0.5),
+            "reasoning": result.get("reasoning", ""),
+        }
+    except json.JSONDecodeError:
+        return {"verdict": "correct", "confidence": 0.0, "reasoning": f"Could not parse LLM response: {raw[:200]}"}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"LLM request failed: {str(e)}")

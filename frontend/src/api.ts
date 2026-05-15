@@ -295,12 +295,30 @@ export const tmkpApi = {
     return response.data;
   },
 
+  suggestVerdict: async (edgeDbId: number, evidenceId: number): Promise<{ verdict: string; confidence: number; reasoning: string }> => {
+    const response = await axios.post(`${API_BASE}/tmkp/suggest-verdict`, {
+      edge_db_id: edgeDbId,
+      evidence_id: evidenceId,
+    });
+    return response.data;
+  },
+
   uploadJsonl: async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
     const response = await axios.post(`${API_BASE}/tmkp/admin/upload-jsonl`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    return response.data;
+  },
+
+  getLlmConfig: async () => {
+    const response = await axios.get(`${API_BASE}/tmkp/admin/llm-config`);
+    return response.data;
+  },
+
+  setLlmConfig: async (config: { provider?: string; base_url?: string; model?: string; api_key?: string }) => {
+    const response = await axios.post(`${API_BASE}/tmkp/admin/llm-config`, config);
     return response.data;
   },
 };
