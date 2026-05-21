@@ -5,6 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { tmkpApi, adminAuth } from '../api';
 import { Login } from './Login';
 import { Footer } from './RelateApp';
+import { InfoTip } from './InfoTip';
 import { TmkpAnnotationItem, TmkpProgress, TmkpVerdict } from '../types';
 import { useBiolinkPredicates, useSmartPredicateSearch } from '../hooks/useBiolinkPredicates';
 
@@ -43,12 +44,13 @@ const getEntityLinks = (normalizedId: string) => {
 const formatPredicate = (p: string) => p.replace('biolink:', '').replace(/_/g, ' ');
 const formatQualifier = (q: string) => q.replace(/_/g, ' ');
 
+
 const VERDICT_CONFIG: Record<TmkpVerdict, { label: string; icon: string; color: string; hoverColor: string; activeColor: string; shortcut: string; tip: string }> = {
   correct:         { label: 'Correct',         icon: '✓',  color: 'text-emerald-600 dark:text-emerald-400', hoverColor: 'hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:border-emerald-300 dark:hover:border-emerald-700', activeColor: 'bg-emerald-500 text-white border-emerald-500', shortcut: 'C', tip: 'The triple accurately reflects what the text says' },
-  swap_so:         { label: 'Swap S/O',        icon: '⇄',  color: 'text-blue-600 dark:text-blue-400',    hoverColor: 'hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700',       activeColor: 'bg-blue-500 text-white border-blue-500',    shortcut: 'S', tip: 'Subject and object are swapped — the text says the opposite direction' },
-  wrong_predicate: { label: 'Wrong Pred.',     icon: '✎',  color: 'text-amber-600 dark:text-amber-400',  hoverColor: 'hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:border-amber-300 dark:hover:border-amber-700',     activeColor: 'bg-amber-500 text-white border-amber-500',  shortcut: 'W', tip: 'The relationship type is wrong — the text describes a different predicate' },
-  wrong_subject:   { label: 'Wrong Subj.',     icon: '⚑',  color: 'text-cyan-600 dark:text-cyan-400',    hoverColor: 'hover:bg-cyan-50 dark:hover:bg-cyan-900/30 hover:border-cyan-300 dark:hover:border-cyan-700',         activeColor: 'bg-cyan-500 text-white border-cyan-500',    shortcut: 'U', tip: 'The subject entity is wrong — the CURIE doesn\'t match what the text refers to' },
-  wrong_object:    { label: 'Wrong Obj.',      icon: '⚐',  color: 'text-orange-600 dark:text-orange-400', hoverColor: 'hover:bg-orange-50 dark:hover:bg-orange-900/30 hover:border-orange-300 dark:hover:border-orange-700', activeColor: 'bg-orange-500 text-white border-orange-500', shortcut: 'O', tip: 'The object entity is wrong — the CURIE doesn\'t match what the text refers to' },
+  swap_so:         { label: 'Swap S/O',        icon: '⇄',  color: 'text-cyan-600 dark:text-cyan-400',    hoverColor: 'hover:bg-cyan-50 dark:hover:bg-cyan-900/30 hover:border-cyan-300 dark:hover:border-cyan-700',       activeColor: 'bg-cyan-500 text-white border-cyan-500',    shortcut: 'S', tip: 'Subject and object are swapped — the text says the opposite direction' },
+  wrong_subject:   { label: 'Wrong Subject',     icon: '⚑',  color: 'text-blue-600 dark:text-blue-400',    hoverColor: 'hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700',         activeColor: 'bg-blue-500 text-white border-blue-500',    shortcut: 'U', tip: 'The subject entity is wrong — the CURIE doesn\'t match what the text refers to' },
+  wrong_predicate: { label: 'Wrong Predicate',     icon: '✎',  color: 'text-purple-600 dark:text-purple-400',  hoverColor: 'hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:border-purple-300 dark:hover:border-purple-700',     activeColor: 'bg-purple-500 text-white border-purple-500',  shortcut: 'W', tip: 'The relationship type is wrong — the text describes a different predicate' },
+  wrong_object:    { label: 'Wrong Object',      icon: '⚐',  color: 'text-orange-600 dark:text-orange-400', hoverColor: 'hover:bg-orange-50 dark:hover:bg-orange-900/30 hover:border-orange-300 dark:hover:border-orange-700', activeColor: 'bg-orange-500 text-white border-orange-500', shortcut: 'O', tip: 'The object entity is wrong — the CURIE doesn\'t match what the text refers to' },
 };
 
 // ── Supporting Text View (single evidence) ─────────────��───────────────────
@@ -97,36 +99,40 @@ const SupportingTextView: React.FC<{ item: TmkpAnnotationItem }> = ({ item }) =>
         flex items-center justify-between">
         <div className="flex items-center gap-2.5 text-xs text-slate-500 dark:text-slate-400">
           <span className="inline-flex items-center gap-1 font-semibold text-slate-600 dark:text-slate-300">
-            <span className="w-5 h-5 rounded-full bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center text-[10px] text-violet-600 dark:text-violet-400 font-bold">
-              {item.item_index}
-            </span>
-            <span className="text-slate-400 dark:text-slate-500">/ {item.total_items}</span>
-          </span>
+            <p>Section in Paper: </p>          
+          </span> 
           {ev.section_type && (
             <span className="px-1.5 py-0.5 rounded-md bg-slate-200/60 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-medium">
               {ev.section_type}
             </span>
-          )}
+          )} |
+          <span className="inline-flex items-center gap-1 font-semibold text-slate-600 dark:text-slate-300">
+            <p>Year: </p>          
+          </span>
           {ev.document_year && (
             <span className="text-slate-400 dark:text-slate-500">{ev.document_year}</span>
           )}
         </div>
         <div className="flex items-center gap-3">
-          {ev.publication && (
-            <a
-              href={`https://www.ncbi.nlm.nih.gov/pmc/articles/${ev.publication}/`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400
-                hover:text-violet-700 dark:hover:text-violet-300 font-medium
-                px-2 py-0.5 rounded-md hover:bg-violet-50 dark:hover:bg-violet-900/30 transition-colors"
-            >
-              {ev.publication}
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-            </a>
-          )}
+          {ev.publication && (() => {
+            const snippet = text.length > 20 ? text.slice(0, 80).trim() : text.trim();
+            const fragment = snippet ? `#:~:text=${encodeURIComponent(snippet)}` : '';
+            return (
+              <a
+                href={`https://www.ncbi.nlm.nih.gov/pmc/articles/${ev.publication}/${fragment}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400
+                  hover:text-violet-700 dark:hover:text-violet-300 font-medium
+                  px-2 py-0.5 rounded-md hover:bg-violet-50 dark:hover:bg-violet-900/30 transition-colors"
+              >
+                {ev.publication}
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            );
+          })()}
         </div>
       </div>
       {/* Text */}
@@ -212,6 +218,7 @@ const NodeNormModal: React.FC<{
 }> = ({ curie, inTextName, source, onClose }) => {
   const [nnData, setNnData] = React.useState<any>(null);
   const [nrData, setNrData] = React.useState<{ curie: string; preferred_name: string; names: string[]; types: string[] } | null>(null);
+  const [nrResults, setNrResults] = React.useState<{ curie: string; label: string; types: string[] }[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -225,12 +232,27 @@ const NodeNormModal: React.FC<{
           const json = await res.json();
           setNnData(json[curie] || null);
         } else {
-          const lookupRes = await fetch(
-            `https://name-resolution-sri.renci.org/lookup?string=${encodeURIComponent(inTextName || curie)}&autocomplete=false&limit=10`,
-            { signal: sig },
-          );
-          if (lookupRes.ok) {
+          const queries = generateSearchQueries(inTextName || curie);
+          let foundMatch = false;
+          const allResults: { curie: string; label: string; types: string[] }[] = [];
+          const seenCuries = new Set<string>();
+
+          for (const q of queries) {
+            if (foundMatch) break;
+            const lookupRes = await fetch(
+              `https://name-resolution-sri.renci.org/lookup?string=${encodeURIComponent(q)}&autocomplete=true&limit=10`,
+              { signal: sig },
+            );
+            if (!lookupRes.ok) continue;
             const results: { curie: string; label: string; synonyms?: string[]; types?: string[] }[] = await lookupRes.json();
+
+            for (const r of results) {
+              if (!seenCuries.has(r.curie)) {
+                seenCuries.add(r.curie);
+                allResults.push({ curie: r.curie, label: r.label, types: r.types || [] });
+              }
+            }
+
             const match = results.find(r => r.curie === curie)
               || (inTextName && results.find(r => {
                 if (normCollapse(r.label) === normCollapse(inTextName)) return true;
@@ -243,8 +265,10 @@ const NodeNormModal: React.FC<{
                 names: [match.label, ...(match.synonyms || [])],
                 types: match.types || [],
               });
+              foundMatch = true;
             }
           }
+          setNrResults(allResults.slice(0, 8));
         }
         setLoading(false);
       } catch (e: any) {
@@ -342,8 +366,22 @@ const NodeNormModal: React.FC<{
             </div>
           ) : error ? (
             <div className="text-sm text-red-500 py-4">{error}</div>
-          ) : (source === 'nn' && !nnData) || (source === 'nr' && !nrData) ? (
+          ) : (source === 'nn' && !nnData) || (source === 'nr' && !nrData && nrResults.length === 0) ? (
             <div className="text-sm text-slate-400 py-4">No data found for this CURIE.</div>
+          ) : source === 'nr' && !nrData && nrResults.length > 0 ? (
+            <div className="space-y-3">
+              <div className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-700/50 text-xs text-slate-500 dark:text-slate-400">
+                No exact match for <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">{curie}</span>, but the Name Resolver returned these results for &ldquo;{inTextName || curie}&rdquo;:
+              </div>
+              <div className="space-y-1">
+                {nrResults.map((r) => (
+                  <div key={r.curie} className="flex items-baseline gap-2 px-2 py-1.5 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700/40 text-xs">
+                    <span className="font-mono font-semibold text-violet-600 dark:text-violet-400 shrink-0">{r.curie}</span>
+                    <span className="text-slate-600 dark:text-slate-300 truncate">{r.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : source === 'nn' ? (
             <div className="space-y-4">
               <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-2">Equivalent Identifiers and Labels</div>
@@ -437,67 +475,129 @@ const NodeNormModal: React.FC<{
 
 // ── Edge Card ───────────────────────────────────────────────────────────────
 const greekToLatin: [RegExp, string][] = [
-  [/α/g, 'alpha'], [/β/g, 'beta'], [/γ/g, 'gamma'], [/δ/g, 'delta'],
-  [/ε/g, 'epsilon'], [/ζ/g, 'zeta'], [/η/g, 'eta'], [/θ/g, 'theta'],
-  [/κ/g, 'kappa'], [/λ/g, 'lambda'], [/μ/g, 'mu'], [/ν/g, 'nu'],
-  [/ξ/g, 'xi'], [/π/g, 'pi'], [/ρ/g, 'rho'], [/σ/g, 'sigma'],
-  [/τ/g, 'tau'], [/φ/g, 'phi'], [/χ/g, 'chi'], [/ψ/g, 'psi'], [/ω/g, 'omega'],
+  [/[αΑ]/g, 'alpha'], [/[βΒ]/g, 'beta'], [/[γΓ]/g, 'gamma'], [/[δΔ]/g, 'delta'],
+  [/[εΕ]/g, 'epsilon'], [/[ζΖ]/g, 'zeta'], [/[ηΗ]/g, 'eta'], [/[θΘ]/g, 'theta'],
+  [/[κΚ]/g, 'kappa'], [/[λΛ]/g, 'lambda'], [/[μΜ]/g, 'mu'], [/[νΝ]/g, 'nu'],
+  [/[ξΞ]/g, 'xi'], [/[πΠ]/g, 'pi'], [/[ρΡ]/g, 'rho'], [/[σΣ]/g, 'sigma'],
+  [/[τΤ]/g, 'tau'], [/[φΦ]/g, 'phi'], [/[χΧ]/g, 'chi'], [/[ψΨ]/g, 'psi'], [/[ωΩ]/g, 'omega'],
+];
+
+const latinToGreek: [RegExp, string][] = [
+  [/\balpha\b/gi, 'α'], [/\bbeta\b/gi, 'β'], [/\bgamma\b/gi, 'γ'], [/\bdelta\b/gi, 'δ'],
+  [/\bepsilon\b/gi, 'ε'], [/\bzeta\b/gi, 'ζ'], [/\beta\b/gi, 'η'], [/\btheta\b/gi, 'θ'],
+  [/\bkappa\b/gi, 'κ'], [/\blambda\b/gi, 'λ'], [/\bmu\b/gi, 'μ'], [/\bnu\b/gi, 'ν'],
+  [/\bxi\b/gi, 'ξ'], [/\bpi\b/gi, 'π'], [/\brho\b/gi, 'ρ'], [/\bsigma\b/gi, 'σ'],
+  [/\btau\b/gi, 'τ'], [/\bphi\b/gi, 'φ'], [/\bchi\b/gi, 'χ'], [/\bpsi\b/gi, 'ψ'], [/\bomega\b/gi, 'ω'],
 ];
 
 const generateVariations = (name: string): string[] => {
   const out = new Set<string>();
+  const clean = (s: string) => s.replace(/\s+/g, ' ').trim();
+
   out.add(name);
-  const spaced = name.replace(/[-_.,;:()[\]{}/\\+]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+  const spaced = clean(name.replace(/[-_.,;:()[\]{}/\\+]+/g, ' '));
   if (spaced) out.add(spaced);
-  let greek = name;
-  for (const [re, lat] of greekToLatin) greek = greek.replace(re, lat);
-  if (greek !== name) {
-    out.add(greek);
-    const greekSpaced = greek.replace(/[-_.,;:()[\]{}/\\+]+/g, ' ').replace(/\s+/g, ' ').trim();
-    if (greekSpaced) out.add(greekSpaced);
+
+  const collapsed = name.replace(/\s+/g, '');
+  if (collapsed !== name) out.add(collapsed);
+
+  let g2l = name;
+  for (const [re, lat] of greekToLatin) g2l = g2l.replace(re, lat);
+  if (g2l !== name) {
+    out.add(clean(g2l));
+    out.add(clean(g2l.replace(/[-_.,;:()[\]{}/\\+]+/g, ' ')));
   }
+
+  let l2g = name;
+  for (const [re, gr] of latinToGreek) l2g = l2g.replace(re, gr);
+  if (l2g !== name) {
+    out.add(clean(l2g));
+    out.add(clean(l2g.replace(/[-_.,;:()[\]{}/\\+]+/g, ' ')));
+  }
+
+  out.delete('');
   return Array.from(out);
+};
+
+const generateSearchQueries = (name: string): string[] => {
+  const seen = new Set<string>();
+  const queries: string[] = [];
+  for (const v of generateVariations(name)) {
+    const q = v.replace(/\s+/g, ' ').trim();
+    const key = q.toLowerCase();
+    if (q.length >= 2 && !seen.has(key)) {
+      seen.add(key);
+      queries.push(q);
+    }
+  }
+  return queries;
 };
 
 const variationsMatch = (variations: string[], label: string): boolean =>
   variations.some(v => normCollapse(v) === normCollapse(label));
 
-const splitCamel = (s: string) => s.replace(/([A-Z])/g, ' $1').trim().split(/\s+/).map(w => w.toLowerCase());
 
-const categoryRoleWords = (category: string, role: 'subject' | 'object'): Set<string> => {
-  const raw = category.replace(/^biolink:/, '').replace(/Association$/, '').replace(/Correlated$/, '');
-  const words = splitCamel(raw);
-  const toIdx = words.indexOf('to');
-  if (toIdx > 0) {
-    const slice = role === 'subject' ? words.slice(0, toIdx) : words.slice(toIdx + 1);
-    return new Set(slice);
+const resolveTaxonLabels = async (taxonIds: string[]): Promise<Record<string, string>> => {
+  const unique = [...new Set(taxonIds.filter(Boolean))];
+  if (unique.length === 0) return {};
+  try {
+    const params = unique.map(id => `curie=${encodeURIComponent(id)}`).join('&');
+    const res = await fetch(`https://nodenormalization-sri.renci.org/get_normalized_nodes?${params}`);
+    if (!res.ok) return {};
+    const data = await res.json();
+    const labels: Record<string, string> = {};
+    for (const id of unique) {
+      const node = data[id];
+      if (node?.id?.label) labels[id] = node.id.label;
+    }
+    return labels;
+  } catch {
+    return {};
   }
-  return new Set(words);
 };
 
-const typeFitsCategory = (types: string[], roleWords: Set<string>): boolean => {
-  if (roleWords.size === 0) return true;
-  for (const t of types) {
-    const base = t.replace(/^biolink:/, '');
-    if (/Or[A-Z]/.test(base) || base.endsWith('Mixin')) continue;
-    const words = splitCamel(base);
-    if (words.some(w => roleWords.has(w))) return true;
-  }
-  return false;
+const CATEGORY_ROLE_TYPES: Record<string, { subject: string; object: string }> = {
+  'biolink:ChemicalAffectsGeneAssociation': { subject: 'ChemicalEntity', object: 'Gene' },
+  'biolink:ChemicalEntityToDiseaseOrPhenotypicFeatureAssociation': { subject: 'ChemicalEntity', object: 'Disease' },
+  'biolink:CorrelatedGeneToDiseaseAssociation': { subject: 'Gene', object: 'Disease' },
+  'biolink:GeneRegulatesGeneAssociation': { subject: 'Gene', object: 'Gene' },
 };
+
+const categoryBiolinkType = (category: string, role: 'subject' | 'object'): string | null => {
+  const entry = CATEGORY_ROLE_TYPES[category];
+  if (entry) return entry[role];
+  // Fallback for unknown categories: try splitting on "To"
+  const raw = category.replace(/^biolink:/, '').replace(/Association$/, '');
+  const toMatch = raw.match(/^(.+?)To([A-Z].+)$/);
+  if (!toMatch) return null;
+  let part = role === 'subject' ? toMatch[1] : toMatch[2];
+  part = part.replace(/^(Correlated|Causal|Druggable|Contributing)/, '');
+  const orMatch = part.match(/^(.+?)Or[A-Z]/);
+  if (orMatch) part = orMatch[1];
+  return part || null;
+};
+
+const typeFitsCategory = (types: string[], expectedType: string | null): boolean => {
+  if (!expectedType) return true;
+  const exact = `biolink:${expectedType}`;
+  return types.includes(exact);
+};
+
+type SuggestionCandidate = { curie: string; label: string; taxon: string | null };
 
 const resolveInTextName = async (
   inTextName: string,
   edgeCurie: string,
   category: string,
   role: 'subject' | 'object',
-): Promise<{ curie: string; label: string } | null> => {
-  if (inTextName.trim().length < 2) return null;
+): Promise<SuggestionCandidate[]> => {
+  if (inTextName.trim().length < 2) return [];
   const variations = generateVariations(inTextName);
-  const roleWords = categoryRoleWords(category, role);
+  const biolinkType = categoryBiolinkType(category, role);
 
   try {
-    // Step 1: Check Node Normalizer label + equivalent identifier labels
+    // Check if in-text name already matches a Node Normalizer label/synonym for the edge CURIE
     const nnRes = await fetch(
       `https://nodenormalization-sri.renci.org/get_normalized_nodes?curie=${encodeURIComponent(edgeCurie)}`,
     );
@@ -505,42 +605,52 @@ const resolveInTextName = async (
       const nnData = await nnRes.json();
       const node = nnData[edgeCurie];
       if (node) {
-        const nnLabel = node.id?.label || '';
-        if (nnLabel && variationsMatch(variations, nnLabel)) return null;
-        const eqIds: { identifier: string; label?: string }[] = node.equivalent_identifiers || [];
-        for (const eq of eqIds) {
-          if (eq.label && variationsMatch(variations, eq.label)) return null;
-        }
+        const allLabels = [
+          node.id?.label,
+          ...(node.equivalent_identifiers || []).map((eq: any) => eq.label),
+        ].filter(Boolean);
+        if (allLabels.some((label: string) => variationsMatch(variations, label))) return [];
       }
     }
 
-    // Step 2: No NN match — query Name Resolver lookup
-    for (const variant of variations) {
-      const q = variant.replace(/\s+/g, ' ').trim();
-      if (q.length < 2) continue;
+    // No NN match — query Name Resolver for alternatives
+    const queries = generateSearchQueries(inTextName);
+    const typeParam = biolinkType ? `&biolink_type=${encodeURIComponent(biolinkType)}` : '';
+    const seenCuries = new Set<string>();
+    const allCandidates: { curie: string; label: string; taxonId: string | null }[] = [];
 
+    for (const q of queries) {
       const nameRes = await fetch(
-        `https://name-resolution-sri.renci.org/lookup?string=${encodeURIComponent(q)}&autocomplete=false&limit=10`,
+        `https://name-resolution-sri.renci.org/lookup?string=${encodeURIComponent(q)}&autocomplete=true&limit=10${typeParam}`,
       );
       if (!nameRes.ok) continue;
-      const results: { curie: string; label: string; synonyms?: string[]; types?: string[]; clique_identifier_count?: number }[] =
+      const results: { curie: string; label: string; synonyms?: string[]; types?: string[]; taxa?: string[]; clique_identifier_count?: number }[] =
         await nameRes.json();
 
-      const candidates = results.filter(r => {
+      for (const r of results) {
+        if (seenCuries.has(r.curie) || r.curie === edgeCurie) continue;
         const labelMatch = variationsMatch(variations, r.label);
         const synMatch = r.synonyms?.some(s => variationsMatch(variations, s));
-        if (!labelMatch && !synMatch) return false;
-        if (r.curie === edgeCurie) return false;
-        if (r.types && r.types.length > 0) return typeFitsCategory(r.types, roleWords);
-        return true;
-      });
-      if (candidates.length === 0) continue;
-      candidates.sort((a, b) => (b.clique_identifier_count || 0) - (a.clique_identifier_count || 0));
-      return { curie: candidates[0].curie, label: candidates[0].label };
+        if (!labelMatch && !synMatch) continue;
+        if (!r.types || r.types.length === 0 || !typeFitsCategory(r.types, biolinkType)) continue;
+        seenCuries.add(r.curie);
+        allCandidates.push({ curie: r.curie, label: r.label, taxonId: r.taxa?.[0] || null });
+      }
+      if (allCandidates.length >= 5) break;
     }
-    return null;
+
+    if (allCandidates.length === 0) return [];
+
+    const taxonIds = allCandidates.map(c => c.taxonId).filter(Boolean) as string[];
+    const taxonLabels = await resolveTaxonLabels(taxonIds);
+
+    return allCandidates.map(c => ({
+      curie: c.curie,
+      label: c.label,
+      taxon: c.taxonId ? (taxonLabels[c.taxonId] || c.taxonId) : null,
+    }));
   } catch {
-    return null;
+    return [];
   }
 };
 
@@ -592,6 +702,10 @@ const EdgeCard: React.FC<{ item: TmkpAnnotationItem }> = ({ item }) => {
         bg-gradient-to-b from-white to-slate-50/50 dark:from-slate-800 dark:to-slate-800/50">
         {/* Assertion row */}
         <div className="px-5 py-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 font-bold">Edge Assertion</span>
+            <InfoTip align="left" text="This shows the extracted triple: Subject → Predicate → Object. Click entity names or CURIEs to view Node Normalizer data. Click the predicate to see its Biolink definition." />
+          </div>
           <div className="flex items-stretch gap-4">
             {/* Subject */}
             <div className="flex-1 min-w-0">
@@ -647,6 +761,10 @@ const EdgeCard: React.FC<{ item: TmkpAnnotationItem }> = ({ item }) => {
 
             {/* Predicate arrow */}
             <div className="flex flex-col items-center justify-center gap-1.5 px-4 shrink-0">
+              <div className="inline-flex items-center gap-1.5 mb-2 justify-end">
+                <span className="w-2 h-2 rounded-full bg-purple-400 dark:bg-purple-500" />
+                <span className="text-[10px] uppercase tracking-widest text-purple-500 dark:text-purple-400 font-bold">Predicate</span>
+              </div>
               <button
                 onClick={() => setShowPredicateDesc(v => !v)}
                 className="px-3 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-800/60
@@ -874,10 +992,15 @@ const LlmConfigModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 };
 
 // ── Verdict Panel ─────────────────────────────────────────────────────────
-const VerdictPanel: React.FC<{
+export interface VerdictPanelHandle {
+  flush: () => void;
+}
+
+const VerdictPanel = React.forwardRef<VerdictPanelHandle, {
   item: TmkpAnnotationItem;
   onVerdict: (verdict: string, extra?: { correctedPredicate?: string; correctedSubject?: string; correctedObject?: string; notes?: string }) => void;
-}> = ({ item, onVerdict }) => {
+  onClear: () => void;
+}>(({ item, onVerdict, onClear }, ref) => {
   const parseVerdicts = (v: string | null): Set<TmkpVerdict> => {
     if (!v) return new Set();
     return new Set(v.split(',').filter(Boolean) as TmkpVerdict[]);
@@ -889,8 +1012,8 @@ const VerdictPanel: React.FC<{
   const [correctedObject, setCorrectedObject] = useState('');
   const [notes, setNotes] = useState(item.verdict_notes || '');
   const [searchTerm, setSearchTerm] = useState('');
-  const [subjectSuggestion, setSubjectSuggestion] = useState<{ curie: string; label: string } | null>(null);
-  const [objectSuggestion, setObjectSuggestion] = useState<{ curie: string; label: string } | null>(null);
+  const [subjectSuggestions, setSubjectSuggestions] = useState<SuggestionCandidate[]>([]);
+  const [objectSuggestions, setObjectSuggestions] = useState<SuggestionCandidate[]>([]);
   const [normTarget, setNormTarget] = useState<{ curie: string; inTextName?: string; source: 'nn' | 'nr' } | null>(null);
   const [showSaved, setShowSaved] = useState(false);
 
@@ -912,21 +1035,23 @@ const VerdictPanel: React.FC<{
     setNotes(item.verdict_notes || '');
     setSearchTerm('');
     setShowSaved(false);
-    setSubjectSuggestion(null);
-    setObjectSuggestion(null);
+    setSubjectSuggestions([]);
+    setObjectSuggestions([]);
     setNormTarget(null);
 
     const cat = item.category || '';
     if (subjectInText) {
-      resolveInTextName(subjectInText, item.subject_id, cat, 'subject').then(s => s && setSubjectSuggestion(s));
+      resolveInTextName(subjectInText, item.subject_id, cat, 'subject').then(setSubjectSuggestions);
     }
     if (objectInText) {
-      resolveInTextName(objectInText, item.object_id, cat, 'object').then(s => s && setObjectSuggestion(s));
+      resolveInTextName(objectInText, item.object_id, cat, 'object').then(setObjectSuggestions);
     }
   }, [item.evidence_id]);
 
   const onVerdictRef = React.useRef(onVerdict);
   onVerdictRef.current = onVerdict;
+  const onClearRef = React.useRef(onClear);
+  onClearRef.current = onClear;
   const selectedRef = React.useRef(selected);
   selectedRef.current = selected;
   const correctedPredicateRef = React.useRef(correctedPredicate);
@@ -937,9 +1062,18 @@ const VerdictPanel: React.FC<{
   correctedObjectRef.current = correctedObject;
   const notesRef = React.useRef(notes);
   notesRef.current = notes;
+  const savedVerdictRef = React.useRef(item.verdict);
+  savedVerdictRef.current = item.verdict;
 
   const doSubmit = React.useCallback((sel: Set<TmkpVerdict>) => {
-    if (sel.size === 0) return;
+    if (sel.size === 0) {
+      if (savedVerdictRef.current) {
+        onClearRef.current();
+        setShowSaved(true);
+        setTimeout(() => setShowSaved(false), 1200);
+      }
+      return;
+    }
     const verdictStr = Array.from(sel).join(',');
     onVerdictRef.current(verdictStr, {
       correctedPredicate: sel.has('wrong_predicate') ? correctedPredicateRef.current || undefined : undefined,
@@ -951,8 +1085,20 @@ const VerdictPanel: React.FC<{
     setTimeout(() => setShowSaved(false), 1200);
   }, []);
 
+  React.useImperativeHandle(ref, () => ({
+    flush: () => {
+      const sel = selectedRef.current;
+      const verdictStr = Array.from(sel).join(',');
+      if (verdictStr !== (savedVerdictRef.current || '')) {
+        doSubmit(sel);
+      }
+    },
+  }), [doSubmit]);
+
   const pendingSubmitRef = React.useRef(false);
+  const userToggledRef = React.useRef(false);
   const toggleVerdict = React.useCallback((verdict: TmkpVerdict) => {
+    userToggledRef.current = true;
     setSelected(prev => {
       if (verdict === 'correct') {
         if (prev.has('correct')) return new Set();
@@ -971,7 +1117,14 @@ const VerdictPanel: React.FC<{
     if (pendingSubmitRef.current && selected.has('correct')) {
       pendingSubmitRef.current = false;
       doSubmit(selected);
+      return;
     }
+    if (userToggledRef.current && selected.size === 0 && savedVerdictRef.current) {
+      userToggledRef.current = false;
+      doSubmit(selected);
+      return;
+    }
+    userToggledRef.current = false;
   }, [selected, doSubmit]);
 
   const handleClickSubmit = React.useCallback(() => {
@@ -1013,7 +1166,10 @@ const VerdictPanel: React.FC<{
       {/* Header */}
       <div className="px-5 py-3 bg-gradient-to-r from-slate-50 to-white dark:from-slate-800 dark:to-slate-800
         border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 tracking-tight">Your Verdict</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 tracking-tight">Your Verdict</h3>
+          <InfoTip text="Pick your verdict for this triple. Shift+C = Correct (auto-submits). Other verdicts can be combined freely — press Enter to submit. Picking Wrong Pred/Subj/Obj lets you optionally suggest a correction." />
+        </div>
         <div className="flex items-center gap-2">
           <AnimatePresence>
             {showSaved && (
@@ -1147,26 +1303,40 @@ const VerdictPanel: React.FC<{
               className="overflow-hidden"
             >
               <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs mb-3">
+                <div className="text-xs mb-3 space-y-1.5">
                   <span className="text-slate-400">Current: <span className="font-semibold text-slate-600 dark:text-slate-300">{item.subject_name || item.subject_id}</span></span>
-                  {subjectSuggestion && (
-                    <button
-                      onClick={() => setNormTarget({ curie: subjectSuggestion.curie, inTextName: subjectInText || undefined, source: 'nr' })}
-                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20
-                        border border-amber-200 dark:border-amber-700/50 group cursor-pointer
-                        hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
-                    >
-                      <span className="text-[10px] uppercase tracking-wider font-bold text-amber-600 dark:text-amber-400">Suggested:</span>
-                      <span className="font-mono font-semibold text-amber-700 dark:text-amber-300 group-hover:underline">
-                        {subjectSuggestion.curie}
-                      </span>
-                      <span className="text-slate-500 dark:text-slate-400">({subjectSuggestion.label})</span>
-                    </button>
+                  {subjectSuggestions.length > 0 && (
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase tracking-wider font-bold text-amber-600 dark:text-amber-400">Suggestions:</span>
+                      {subjectSuggestions.map(s => (
+                        <div key={s.curie} className="flex items-center gap-1.5 pl-1">
+                          <button
+                            onClick={() => setNormTarget({ curie: s.curie, inTextName: subjectInText || undefined, source: 'nr' })}
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20
+                              border border-amber-200 dark:border-amber-700/50 group cursor-pointer
+                              hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                          >
+                            <span className="font-mono font-semibold text-amber-700 dark:text-amber-300 group-hover:underline">{s.curie}</span>
+                            <span className="text-slate-500 dark:text-slate-400">{s.label}</span>
+                            {s.taxon && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400">{s.taxon}</span>}
+                          </button>
+                          <button
+                            onClick={() => setCorrectedSubject(s.curie)}
+                            title="Accept this suggestion"
+                            className="px-1.5 py-0.5 rounded text-[10px] font-bold text-emerald-600 dark:text-emerald-400
+                              bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/50
+                              hover:bg-emerald-100 dark:hover:bg-emerald-800/30 transition-colors"
+                          >
+                            Accept
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-cyan-500">⚑</span>
-                  <span className="text-xs font-bold text-cyan-700 dark:text-cyan-300">Correct subject <span className="font-normal text-slate-400">(optional)</span></span>
+                  <span className="text-blue-500">⚑</span>
+                  <span className="text-xs font-bold text-blue-700 dark:text-blue-300">Correct subject <span className="font-normal text-slate-400">(optional)</span></span>
                 </div>
                 <input
                   type="text"
@@ -1174,8 +1344,8 @@ const VerdictPanel: React.FC<{
                   onChange={(e) => setCorrectedSubject(e.target.value)}
                   placeholder="Leave blank if unsure..."
                   className="w-full px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600
-                    dark:bg-slate-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400
-                    focus:border-cyan-400 placeholder:text-slate-400"
+                    dark:bg-slate-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400
+                    focus:border-blue-400 placeholder:text-slate-400"
                 />
               </div>
             </motion.div>
@@ -1193,21 +1363,35 @@ const VerdictPanel: React.FC<{
               className="overflow-hidden"
             >
               <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs mb-3">
+                <div className="text-xs mb-3 space-y-1.5">
                   <span className="text-slate-400">Current: <span className="font-semibold text-slate-600 dark:text-slate-300">{item.object_name || item.object_id}</span></span>
-                  {objectSuggestion && (
-                    <button
-                      onClick={() => setNormTarget({ curie: objectSuggestion.curie, inTextName: objectInText || undefined, source: 'nr' })}
-                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20
-                        border border-amber-200 dark:border-amber-700/50 group cursor-pointer
-                        hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
-                    >
-                      <span className="text-[10px] uppercase tracking-wider font-bold text-amber-600 dark:text-amber-400">Suggested:</span>
-                      <span className="font-mono font-semibold text-amber-700 dark:text-amber-300 group-hover:underline">
-                        {objectSuggestion.curie}
-                      </span>
-                      <span className="text-slate-500 dark:text-slate-400">({objectSuggestion.label})</span>
-                    </button>
+                  {objectSuggestions.length > 0 && (
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase tracking-wider font-bold text-amber-600 dark:text-amber-400">Suggestions:</span>
+                      {objectSuggestions.map(s => (
+                        <div key={s.curie} className="flex items-center gap-1.5 pl-1">
+                          <button
+                            onClick={() => setNormTarget({ curie: s.curie, inTextName: objectInText || undefined, source: 'nr' })}
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20
+                              border border-amber-200 dark:border-amber-700/50 group cursor-pointer
+                              hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                          >
+                            <span className="font-mono font-semibold text-amber-700 dark:text-amber-300 group-hover:underline">{s.curie}</span>
+                            <span className="text-slate-500 dark:text-slate-400">{s.label}</span>
+                            {s.taxon && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400">{s.taxon}</span>}
+                          </button>
+                          <button
+                            onClick={() => setCorrectedObject(s.curie)}
+                            title="Accept this suggestion"
+                            className="px-1.5 py-0.5 rounded text-[10px] font-bold text-emerald-600 dark:text-emerald-400
+                              bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/50
+                              hover:bg-emerald-100 dark:hover:bg-emerald-800/30 transition-colors"
+                          >
+                            Accept
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2 mb-2">
@@ -1266,17 +1450,17 @@ const VerdictPanel: React.FC<{
               transition={{ duration: 0.15 }}
               className="overflow-hidden"
             >
-              <button
+              {/* <button
                 onClick={handleClickSubmit}
                 className="mt-4 w-full px-4 py-2.5 text-sm font-semibold bg-violet-500 hover:bg-violet-600
                   active:bg-violet-700 text-white rounded-lg transition-colors shadow-sm
                   focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-violet-500"
               >
                 Submit ({Array.from(selected).map(v => v.replace(/_/g, ' ')).join(' + ')})
-              </button>
-              <div className="mt-1.5 text-center text-[10px] text-slate-400">
+              </button> */}
+              {/* <div className="mt-1.5 text-center text-[10px] text-slate-400">
                 or press <kbd className="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono font-semibold text-slate-500 dark:text-slate-400">Enter</kbd>
-              </div>
+              </div> */}
             </motion.div>
           )}
         </AnimatePresence>
@@ -1298,7 +1482,7 @@ const VerdictPanel: React.FC<{
     </div>
     </>
   );
-};
+});
 
 // ── Item Progress Strip ──────────────────────────────────────────────────────
 const BATCH_SIZE = 100;
@@ -1310,9 +1494,9 @@ const verdictDotColor = (verdict: string | null): string => {
   if (hasMultiple) return 'bg-violet-400';
   switch (first) {
     case 'correct': return 'bg-emerald-400';
-    case 'swap_so': return 'bg-blue-400';
+    case 'swap_so': return 'bg-cyan-400';
+    case 'wrong_subject': return 'bg-blue-400';
     case 'wrong_predicate': return 'bg-amber-400';
-    case 'wrong_subject': return 'bg-cyan-400';
     case 'wrong_object': return 'bg-orange-400';
     default: return 'bg-slate-300 dark:bg-slate-600';
   }
@@ -1328,9 +1512,12 @@ const ProgressStrip: React.FC<{
   return (
     <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
       <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-          Batch Progress
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+            Batch Progress
+          </span>
+          <InfoTip text="Each dot is one item in your batch. Colors show verdict type: green = correct, cyan = swapped, blue = wrong subject, purple = wrong predicate, orange = wrong object, purple = combo. Click any dot to jump to that item." />
+        </div>
         <span className="text-[11px] font-bold tabular-nums text-slate-600 dark:text-slate-300">
           {answeredCount} / {items.length} done
         </span>
@@ -1362,9 +1549,9 @@ const ProgressStrip: React.FC<{
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] tabular-nums">
             <span className="text-emerald-600 dark:text-emerald-400" title="Correct">{overall.correct_count} correct</span>
-            <span className="text-blue-600 dark:text-blue-400" title="Swapped">{overall.swapped_count} swapped</span>
-            <span className="text-amber-600 dark:text-amber-400" title="Wrong predicate">{overall.wrong_predicate_count} wrong pred</span>
-            <span className="text-cyan-600 dark:text-cyan-400" title="Wrong subject">{overall.wrong_subject_count} wrong subj</span>
+            <span className="text-cyan-600 dark:text-cyan-400" title="Swapped">{overall.swapped_count} swapped</span>
+            <span className="text-blue-600 dark:text-blue-400" title="Wrong subject">{overall.wrong_subject_count} wrong subj</span>
+            <span className="text-purple-600 dark:text-purple-400" title="Wrong predicate">{overall.wrong_predicate_count} wrong pred</span>
             <span className="text-orange-600 dark:text-orange-400" title="Wrong object">{overall.wrong_object_count} wrong obj</span>
             <span className="text-pink-600 dark:text-pink-400" title="Multi-verdict combos">{overall.combo_count} combo</span>
             <span className="text-slate-400 dark:text-slate-500">{overall.remaining} remaining</span>
@@ -1389,21 +1576,10 @@ export const TmkpApp: React.FC = () => {
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewPage, setReviewPage] = useState(0);
 
-  const [showGuide, setShowGuide] = useState(() => !localStorage.getItem('tmkp_guide_dismissed'));
   const batchRef = React.useRef(batch);
   batchRef.current = batch;
+  const verdictPanelRef = React.useRef<VerdictPanelHandle>(null);
 
-  useEffect(() => {
-    if (annotator && batch.length > 0) {
-      try { localStorage.setItem(`tmkp_batch_${annotator}`, JSON.stringify(batch)); } catch {}
-    }
-  }, [batch, annotator]);
-
-  useEffect(() => {
-    if (annotator) {
-      try { localStorage.setItem(`tmkp_batch_idx_${annotator}`, String(batchIndex)); } catch {}
-    }
-  }, [batchIndex, annotator]);
 
   const isAdminPage = location.pathname.endsWith('/admin');
   const item = batch[batchIndex] || null;
@@ -1417,7 +1593,8 @@ export const TmkpApp: React.FC = () => {
       setError(null);
       const items = await tmkpApi.getBatch(annotator, BATCH_SIZE);
       setBatch(items);
-      setBatchIndex(0);
+      const firstUnverified = items.findIndex(it => !it.verdict);
+      setBatchIndex(firstUnverified >= 0 ? firstUnverified : 0);
     } catch (err: any) {
       const msg = err.response?.data?.detail || 'Failed to load items';
       setError(msg);
@@ -1441,20 +1618,6 @@ export const TmkpApp: React.FC = () => {
     }
     if (annotator && !initRef.current) {
       initRef.current = true;
-      try {
-        const stored = localStorage.getItem(`tmkp_batch_${annotator}`);
-        const storedIdx = localStorage.getItem(`tmkp_batch_idx_${annotator}`);
-        if (stored) {
-          const items = JSON.parse(stored) as TmkpAnnotationItem[];
-          if (items.length > 0) {
-            setBatch(items);
-            setBatchIndex(storedIdx ? parseInt(storedIdx, 10) : 0);
-            setLoading(false);
-            loadProgress();
-            return;
-          }
-        }
-      } catch {}
       loadBatch();
       loadProgress();
     }
@@ -1491,6 +1654,21 @@ export const TmkpApp: React.FC = () => {
       loadProgress();
     } catch (err: any) {
       console.error('Failed to save verification:', err?.response?.data || err);
+    }
+  }, [annotator, loadProgress]);
+
+  const handleClearVerdict = useCallback(async () => {
+    const currentItem = itemRef.current;
+    if (!currentItem || !annotator) return;
+    const evidenceId = currentItem.evidence_id;
+    try {
+      await tmkpApi.deleteVerification(currentItem.edge_db_id, annotator, evidenceId);
+      setBatch(prev => prev.map(it =>
+        it.evidence_id === evidenceId ? { ...it, verdict: null, verdict_notes: null } : it
+      ));
+      loadProgress();
+    } catch (err: any) {
+      console.error('Failed to clear verification:', err?.response?.data || err);
     }
   }, [annotator, loadProgress]);
 
@@ -1685,45 +1863,6 @@ export const TmkpApp: React.FC = () => {
         </div>
       </header>
 
-      {/* Onboarding guide */}
-      <AnimatePresence>
-        {showGuide && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="flex-shrink-0 overflow-hidden"
-          >
-            <div className="bg-violet-50 dark:bg-violet-950/30 border-b border-violet-200 dark:border-violet-800/50 px-5 py-3">
-              <div className="max-w-[1600px] mx-auto flex items-start gap-4">
-                <div className="flex-1 grid grid-cols-3 gap-4 text-xs text-slate-600 dark:text-slate-300">
-                  <div>
-                    <div className="font-bold text-violet-700 dark:text-violet-300 mb-1">Left Panel</div>
-                    <p className="leading-relaxed">Shows the edge assertion (Subject &rarr; Predicate &rarr; Object) with entity names from Node Normalizer. Below is the supporting text with highlighted spans.</p>
-                  </div>
-                  <div>
-                    <div className="font-bold text-violet-700 dark:text-violet-300 mb-1">Right Panel</div>
-                    <p className="leading-relaxed">Pick your verdict. <strong>Shift+C</strong> = Correct (auto-submits). Other verdicts combine freely — press <strong>Enter</strong> to submit.</p>
-                  </div>
-                  <div>
-                    <div className="font-bold text-violet-700 dark:text-violet-300 mb-1">Clickable Elements</div>
-                    <p className="leading-relaxed">Click entity names/CURIEs to see Node Normalizer data. Click the predicate for its definition. Amber "Suggested" badges link to Name Resolver alternatives.</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => { setShowGuide(false); localStorage.setItem('tmkp_guide_dismissed', '1'); }}
-                  className="shrink-0 px-2.5 py-1 text-[11px] font-semibold text-violet-600 dark:text-violet-400
-                    bg-violet-100 dark:bg-violet-900/40 hover:bg-violet-200 dark:hover:bg-violet-800/50
-                    rounded-md transition-colors"
-                >
-                  Got it
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Body */}
       <div className="flex-1 overflow-hidden">
@@ -1747,6 +1886,7 @@ export const TmkpApp: React.FC = () => {
                   <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full">
                     {item.item_index} / {item.total_items}
                   </span>
+                  <InfoTip text="The original text from which the triple was extracted. The subject is highlighted in blue and the object in red. Click the publication ID (top-right) to view the source paper in PubMed Central." />
                 </div>
                 <motion.div
                   key={item.evidence_id + '-ev'}
@@ -1782,12 +1922,12 @@ export const TmkpApp: React.FC = () => {
               )}
 
               {/* Progress strip */}
-              <ProgressStrip items={batch} currentIndex={batchIndex} onJump={setBatchIndex} overall={progress} />
+              <ProgressStrip items={batch} currentIndex={batchIndex} onJump={(idx) => { verdictPanelRef.current?.flush(); setBatchIndex(idx); }} overall={progress} />
 
               {/* Navigation */}
               <div className="flex items-center justify-between">
                 <button
-                  onClick={() => setBatchIndex(Math.max(0, batchIndex - 1))}
+                  onClick={() => { verdictPanelRef.current?.flush(); setBatchIndex(Math.max(0, batchIndex - 1)); }}
                   disabled={batchIndex <= 0}
                   className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold
                     bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700
@@ -1809,7 +1949,7 @@ export const TmkpApp: React.FC = () => {
                   </span>
                 </div>
                 <button
-                  onClick={() => setBatchIndex(Math.min(batch.length - 1, batchIndex + 1))}
+                  onClick={() => { verdictPanelRef.current?.flush(); setBatchIndex(Math.min(batch.length - 1, batchIndex + 1)); }}
                   disabled={batchIndex >= batch.length - 1}
                   className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold
                     bg-violet-500 hover:bg-violet-600 active:bg-violet-700
@@ -1845,7 +1985,7 @@ export const TmkpApp: React.FC = () => {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
               >
-                <VerdictPanel item={item} onVerdict={handleVerdict} />
+                <VerdictPanel ref={verdictPanelRef} item={item} onVerdict={handleVerdict} onClear={handleClearVerdict} />
               </motion.div>
             </div>
           </div>

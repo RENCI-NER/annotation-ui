@@ -8,14 +8,14 @@ Fact-check text-mined knowledge graph edges from the [Text Mining Knowledge Prov
 - Multi-select verdicts: all non-correct verdicts are combinable (e.g. swap_so + wrong_predicate)
 - Correct is exclusive — selecting it auto-submits immediately
 - Optional correction inputs for wrong subject/object/predicate (not required)
-- CURIE suggestions appear inline when selecting wrong subject/object — clickable to view Name Resolver details
+- CURIE suggestions appear inline when selecting wrong subject/object — multiple candidates shown with taxon labels so the user can pick the right species; searches diversified (hyphens→spaces, Greek↔Latin, collapsed forms)
 - Supporting text display with highlighted subject/object character spans
 - Entity names resolved via [Node Normalizer](https://nodenormalization-sri.renci.org); suggested CURIEs via [Name Resolver](https://name-resolution-sri.renci.org) when in-text name doesn't match
 - Clickable predicate showing Biolink model description
 - Clickable entity names/CURIEs to view Node Normalizer data; in-text name shown in popup for reference
 - External entity links (Identifiers.org, NCBI Gene, etc.) collapsed behind a toggle icon
 - Tooltip on each verdict button explaining what it means
-- Dismissable onboarding guide for new users
+- Contextual info (?) buttons at key UI sections explaining each part of the interface
 - Batch-based workflow: 100 items per batch with visual progress strip and overall stats
 - Evidences grouped by edge so you review all evidence for one triple before moving on
 - Dual-annotator targeting for inter-annotator agreement
@@ -38,7 +38,7 @@ Fact-check text-mined knowledge graph edges from the [Text Mining Knowledge Prov
 2. A batch of 100 items loads automatically (grouped by edge)
 3. Review the edge assertion (subject, predicate, object) and any qualifiers
 4. Entity names shown are the Node Normalizer preferred labels for each CURIE
-5. If the in-text name doesn't match NN labels, a **Suggested** CURIE appears when you select Wrong Subject/Object — click it to see Name Resolver details
+5. If the in-text name doesn't match NN labels, **Suggested CURIEs** appear when you select Wrong Subject/Object — multiple candidates shown with species taxon labels so you can pick the right one
 6. Click entity names or CURIEs to view Node Normalizer data; the in-text name is highlighted in yellow in the popup for easy reference
 7. Click the predicate to see its Biolink model definition
 8. Read the supporting text — subject is highlighted in blue, object in red

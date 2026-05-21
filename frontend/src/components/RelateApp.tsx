@@ -8,6 +8,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { api, adminAuth } from '../api';
 import { CompletionModal } from './CompletionModal';
 import { Article, Progress, Stats } from '../types';
+import { InfoTip } from './InfoTip';
 
 type Mode = 'normal' | 'review-skipped' | 'review-flagged';
 
@@ -666,6 +667,12 @@ export const RelateApp: React.FC = () => {
 
           {/* Stats row */}
           {progress && (
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Progress</span>
+              <InfoTip text="Annotated = triples with a predicate selected. Skipped = deferred for later. Flagged = marked as problematic. Remaining = not yet reviewed. Use 'Review Skipped/Flagged' in the header to revisit." align="right" />
+            </div>
+          )}
+          {progress && (
             <div className="grid grid-cols-4 gap-2">
               <StatCard label="Annotated" value={progress.annotated_triples ?? 0} color="teal" />
               <StatCard label="Skipped"   value={progress.skipped_triples   ?? 0} color="amber" />
@@ -747,6 +754,10 @@ export const RelateApp: React.FC = () => {
             border-r border-slate-200 dark:border-slate-700
             bg-white dark:bg-slate-800">
             <div className="p-5">
+              <div className="flex items-center gap-1.5 mb-3">
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Abstract</span>
+                <InfoTip text="The abstract with highlighted entities: subject in blue, object in red, and relationship context in yellow. Read this to understand the relationship before selecting a predicate." align="right" />
+              </div>
               <AbstractView
                 abstract={article.abstract}
                 highlightedEntities={[currentTriple.subject, currentTriple.object]}

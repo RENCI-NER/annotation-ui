@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Triple } from '../types';
 import { useBiolinkPredicates, useSmartPredicateSearch } from '../hooks/useBiolinkPredicates';
+import { InfoTip } from './InfoTip';
 
 interface Props {
   triple: Triple;
@@ -134,7 +135,10 @@ export const AnnotationPanel: React.FC<Props> = ({
   return (
     <div className="h-full flex flex-col p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-gray-800 dark:text-white">✍️ Annotation</h3>
+        <div className="flex items-center gap-1.5">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white">✍️ Annotation</h3>
+          <InfoTip text="Review the subject/object entities and the LLM-extracted relationship text, then pick the correct Biolink predicate from the list below. Use Skip if unsure, Flag if something looks wrong." align="right" />
+        </div>
         <div className="flex items-center gap-2">
           <AnimatePresence>
             {showSaved && (
@@ -248,7 +252,7 @@ export const AnnotationPanel: React.FC<Props> = ({
             
             {triple.llm_suggestion && (
               <div className="flex items-start gap-2 bg-yellow-50 dark:bg-yellow-900 p-2 rounded border border-yellow-200 dark:border-yellow-700">
-                <span className="font-semibold text-yellow-800 dark:text-yellow-100 shrink-0">Relationship Text:</span>
+                <span className="font-semibold text-yellow-800 dark:text-yellow-100 shrink-0 flex items-center gap-1">Relationship Text: <InfoTip text="This is the free-text relation extracted by the LLM from the abstract. Your job is to map it to a standardized Biolink predicate below." /></span>
                 <span className="text-yellow-900 dark:text-yellow-200">{triple.llm_suggestion}</span>
               </div>
             )}
@@ -256,8 +260,8 @@ export const AnnotationPanel: React.FC<Props> = ({
 
           {/* Predicate Selection */}
           <div className="mb-4">
-            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              Select Biolink Predicate:
+            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1">
+              Select Biolink Predicate: <InfoTip text="Pick the predicate that best captures the relationship described in the text. Yellow-highlighted options are top matches based on the LLM suggestion. Use the search box to filter by name." />
               {triple.llm_suggestion && !searchTerm && (
                 <span className="ml-2 text-xs text-yellow-600 dark:text-yellow-400 font-normal">
                   replacement for relationship text

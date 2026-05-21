@@ -254,6 +254,13 @@ export const tmkpApi = {
     return response.data;
   },
 
+  deleteVerification: async (edgeDbId: number, annotator: string, evidenceId?: number | null) => {
+    const params: Record<string, any> = { edge_db_id: edgeDbId, annotator };
+    if (evidenceId != null) params.evidence_id = evidenceId;
+    const response = await axios.delete(`${API_BASE}/tmkp/verify`, { params });
+    return response.data;
+  },
+
   getProgress: async (annotator: string = 'default'): Promise<TmkpProgress> => {
     const response = await axios.get(`${API_BASE}/tmkp/progress`, {
       params: { annotator },
