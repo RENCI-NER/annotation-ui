@@ -149,9 +149,8 @@ def get_next_item(annotator: str = "default", db: Session = Depends(get_db)):
 @router.get("/items/batch", response_model=List[schemas.TmkpAnnotationItem])
 def get_batch(annotator: str = "default", limit: int = 100, db: Session = Depends(get_db)):
     """
-    Return a batch of unverified items for the annotator, up to `limit`.
-    Same dual-annotator priority as /items/next but returns many at once.
-    Respects per-annotator item cap set by admin.
+    Return verified items first, then unverified items (up to `limit` new),
+    so the progress strip reflects past work alongside new items.
     """
     annotator = normalize_annotator(annotator)
 
@@ -191,12 +190,14 @@ def get_batch(annotator: str = "default", limit: int = 100, db: Session = Depend
     ).all():
         verification_counts[(row[0], row[1])] = row[2]
 
+    verified_evs = []
     needs_second = []
     needs_first = []
 
     for ev in all_evidences:
         key = (ev.edge_db_id, ev.id)
         if key in my_verified:
+            verified_evs.append(ev)
             continue
         count = verification_counts.get(key, 0)
         if count == 1:
@@ -204,7 +205,6 @@ def get_batch(annotator: str = "default", limit: int = 100, db: Session = Depend
         elif count == 0:
             needs_first.append(ev)
 
-    # Group by edge so annotator sees all evidences for one triple together
     def group_by_edge(evidences):
         groups: dict[int, list] = {}
         for ev in evidences:
@@ -218,12 +218,14 @@ def get_batch(annotator: str = "default", limit: int = 100, db: Session = Depend
 
     needs_second = group_by_edge(needs_second)
     needs_first = group_by_edge(needs_first)
-    selected = (needs_second + needs_first)[:limit]
+    unverified_selected = (needs_second + needs_first)[:limit]
 
-    if not selected and my_verified:
-        raise HTTPException(status_code=404, detail="All available edges verified! Great work.")
-    if not selected:
+    if not unverified_selected and not verified_evs:
         raise HTTPException(status_code=404, detail="No edges available. Upload a JSONL file first.")
+    if not unverified_selected and verified_evs:
+        raise HTTPException(status_code=404, detail="All available edges verified! Great work.")
+
+    selected = verified_evs + unverified_selected
 
     edge_cache: dict[int, models.TmkpEdge] = {}
     ev_counts_cache: dict[int, list] = {}
@@ -422,6 +424,31 @@ def save_verification(v: schemas.TmkpVerificationCreate, db: Session = Depends(g
         db.commit()
         db.refresh(db_v)
         return db_v
+
+
+@router.delete("/verify")
+def delete_verification(
+    edge_db_id: int,
+    annotator: str,
+    evidence_id: int = None,
+    db: Session = Depends(get_db),
+):
+    annotator = normalize_annotator(annotator)
+    filters = [
+        models.TmkpVerification.edge_db_id == edge_db_id,
+        models.TmkpVerification.annotator == annotator,
+    ]
+    if evidence_id is not None:
+        filters.append(models.TmkpVerification.evidence_id == evidence_id)
+    else:
+        filters.append(models.TmkpVerification.evidence_id.is_(None))
+
+    existing = db.query(models.TmkpVerification).filter(*filters).first()
+    if not existing:
+        return {"ok": True, "deleted": False}
+    db.delete(existing)
+    db.commit()
+    return {"ok": True, "deleted": True}
 
 
 # ── Progress ─────────────────────────────────────────────────────────────────
